@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Josco Printers - PrintFlow ERP (Impress MIS)</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fira+Sans:wght@400;500;700&family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#001523",
+              "primary-light": "#0284c7",
+              surface: "#faf8ff",
+              brand: "#0284c7",
+              "primary-container": "#002b41",
+            },
+            fontFamily: {
+              sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+              mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+              headline: ["DM Sans", "sans-serif"],
+              body: ["Fira Sans", "sans-serif"],
+            }
+          }
+        }
+      };
+    </script>
+  </head>
+  <body class="bg-[#f8fafc] text-slate-800 font-sans text-xs antialiased selection:bg-blue-600 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

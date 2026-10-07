@@ -1,0 +1,1439 @@
+// Initial mock dataset for PrintFlow ERP - Josco Printers Edition
+// Covers all 12 Stages + 5 Cross-Cutting Modules with realistic offset printing data
+
+export const INITIAL_ROLES = [
+  { role_code: 'Admin', role_name: 'System Administrator', permissions: ['all'] },
+  { role_code: 'Sales', role_name: 'Sales & Estimation Executive', permissions: ['crm', 'quotes', 'orders', 'tasks'] },
+  { role_code: 'PrePress', role_name: 'Pre-Press Designer & CTP Specialist', permissions: ['design', 'proofing', 'plates'] },
+  { role_code: 'Press', role_name: 'Offset Press Machine Operator', permissions: ['press_terminal', 'production_logs'] },
+  { role_code: 'PostPress', role_name: 'Finishing & QC Supervisor', permissions: ['finishing', 'qc', 'issues'] },
+  { role_code: 'Billing', role_name: 'Accounts & Invoicing Officer', permissions: ['invoices', 'receipts', 'ledger', 'reports'] },
+];
+
+export const INITIAL_USERS = [
+  { id: 'usr-1', full_name: 'System Administrator (Admin)', email: 'admin@joscoprinters.com', role_code: 'Admin', phone: '+91 98765 43210', is_active: true, avatar: 'ADM' },
+  { id: 'usr-2', full_name: 'Priya Sharma (Sales Lead)', email: 'priya@joscoprinters.com', role_code: 'Sales', phone: '+91 98765 43211', is_active: true, avatar: 'SLS' },
+  { id: 'usr-3', full_name: 'Kiran Verma (Pre-Press Lead)', email: 'kiran@joscoprinters.com', role_code: 'PrePress', phone: '+91 98765 43212', is_active: true, avatar: 'PRP' },
+  { id: 'usr-4', full_name: 'Rajesh Nair (Press Operator)', email: 'rajesh@joscoprinters.com', role_code: 'Press', phone: '+91 98765 43213', is_active: true, avatar: 'PRS' },
+  { id: 'usr-5', full_name: 'Anil Kumar (Finishing & QC)', email: 'anil@joscoprinters.com', role_code: 'PostPress', phone: '+91 98765 43214', is_active: true, avatar: 'FIN' },
+  { id: 'usr-6', full_name: 'Sunita Rao (Accounts Manager)', email: 'sunita@joscoprinters.com', role_code: 'Billing', phone: '+91 98765 43215', is_active: true, avatar: 'ACC' },
+];
+
+export const INITIAL_MACHINES = [
+  { id: 'mac-1', name: 'Ryobi 32', location: 'Kalkere', type: 'Offset', max_sheet_size: '13" x 19"', max_speed_iph: 10000, hourly_rate: 900, status: 'Running', current_job_id: 'job-101' },
+  { id: 'mac-2', name: 'Ryobi 660', location: 'Byrathi', type: 'Offset', max_sheet_size: '20" x 26"', max_speed_iph: 12000, hourly_rate: 1500, status: 'Running', current_job_id: 'job-102' },
+  { id: 'mac-3', name: 'Lithrone 26', location: 'Kalkere', type: 'Offset', max_sheet_size: '20" x 26"', max_speed_iph: 13000, hourly_rate: 1800, status: 'Idle', current_job_id: null },
+  { id: 'mac-4', name: 'KMC4080_Kalkere', location: 'Kalkere', type: 'Digital Color', max_sheet_size: '13" x 19.2"', max_speed_iph: 4860, hourly_rate: 1200, status: 'Running', current_job_id: 'job-103' },
+  { id: 'mac-5', name: 'KMC4080_Byrathi', location: 'Byrathi', type: 'Digital Color', max_sheet_size: '13" x 19.2"', max_speed_iph: 4860, hourly_rate: 1200, status: 'Idle', current_job_id: null },
+  { id: 'mac-6', name: 'KM2100 Black', location: 'Byrathi', type: 'Digital Mono', max_sheet_size: '12" x 18"', max_speed_iph: 6000, hourly_rate: 750, status: 'Running', current_job_id: 'job-104' },
+  { id: 'mac-7', name: 'Kodak CTP Thermal Setter', location: 'Kalkere', type: 'Pre-Press', max_sheet_size: 'Plate 32" x 41"', max_speed_iph: 30, hourly_rate: 600, status: 'Running', current_job_id: null },
+  { id: 'mac-8', name: 'Polar 115 Paper Cutter', location: 'Byrathi', type: 'Finishing', max_sheet_size: 'Cut width 45"', max_speed_iph: 4000, hourly_rate: 450, status: 'Running', current_job_id: null },
+];
+
+export const INITIAL_CUSTOMERS = [
+  {
+    id: 'cust-1',
+    company_name: 'Apex Healthcare Pvt Ltd',
+    contact_person: 'Dr. Sameer Malhotra',
+    customer_type: 'Corporate',
+    price_slab: 'Contract (15% Disc)',
+    email: 'purchase@apexhealth.com',
+    phone: '+91 98450 12345',
+    gstin: '29ABCDE1234F1Z5',
+    credit_limit: 250000,
+    credit_period_days: 30,
+    current_balance: 42500,
+    address: 'Plot 45, Electronic City Phase 1, Bangalore',
+    created_at: '2026-01-15T10:00:00Z',
+  },
+  {
+    id: 'cust-2',
+    company_name: 'FreshBakes Confectionery',
+    contact_person: 'Anita Deshmukh',
+    customer_type: 'Reseller',
+    price_slab: 'Volume Discount (10% Disc)',
+    email: 'orders@freshbakes.in',
+    phone: '+91 98230 67890',
+    gstin: '29FGHIJ5678K2Z9',
+    credit_limit: 100000,
+    credit_period_days: 15,
+    current_balance: 18400,
+    address: 'Shop 12, Indiranagar 100ft Road, Bangalore',
+    created_at: '2026-02-10T14:30:00Z',
+  },
+  {
+    id: 'cust-3',
+    company_name: 'Horizon EduTech Publishing',
+    contact_person: 'Prof. Ramesh Rao',
+    customer_type: 'Corporate',
+    price_slab: 'Contract (15% Disc)',
+    email: 'production@horizonedu.org',
+    phone: '+91 97400 34567',
+    gstin: '29KLMNO9012P3Z1',
+    credit_limit: 500000,
+    credit_period_days: 45,
+    current_balance: 112000,
+    address: 'Tech Park Zone B, Whitefield, Bangalore',
+    created_at: '2026-01-20T09:15:00Z',
+  },
+  {
+    id: 'cust-4',
+    company_name: 'UrbanStyle Boutique',
+    contact_person: 'Pooja Hegde',
+    customer_type: 'Retail',
+    price_slab: 'Standard',
+    email: 'pooja@urbanstyle.com',
+    phone: '+91 99000 88776',
+    gstin: '',
+    credit_limit: 0,
+    credit_period_days: 0,
+    current_balance: 0,
+    address: 'Brigade Road, Commercial Street, Bangalore',
+    created_at: '2026-03-01T11:20:00Z',
+  },
+];
+
+export const INITIAL_INVENTORY = [
+  {
+    id: 'inv-1',
+    sku: 'PAP-ART-130G-23X36',
+    name: '130 GSM Gloss Art Paper (23" x 36")',
+    category: 'Paper',
+    branch_location: 'Main Press',
+    quantity_on_hand: 42,
+    reorder_threshold: 20,
+    unit_cost: 1450,
+    unit_of_measure: 'Reams',
+    supplier_name: 'BILT Paper Mills Ltd',
+    updated_at: '2026-08-20T10:00:00Z',
+  },
+  {
+    id: 'inv-2',
+    sku: 'PAP-ART-300G-20X30',
+    name: '300 GSM Premium Art Card (20" x 30")',
+    category: 'Paper',
+    branch_location: 'Main Press',
+    quantity_on_hand: 12, // LOW STOCK
+    reorder_threshold: 25,
+    unit_cost: 2200,
+    unit_of_measure: 'Reams',
+    supplier_name: 'ITC PSPD Mills',
+    updated_at: '2026-08-22T11:30:00Z',
+  },
+  {
+    id: 'inv-3',
+    sku: 'PAP-MAP-080G-18X23',
+    name: '80 GSM Sunshine Maplitho (18" x 23")',
+    category: 'Paper',
+    branch_location: 'Branch 2 (Peenya)',
+    quantity_on_hand: 85,
+    reorder_threshold: 30,
+    unit_cost: 920,
+    unit_of_measure: 'Reams',
+    supplier_name: 'JK Paper Ltd',
+    updated_at: '2026-08-18T16:00:00Z',
+  },
+  {
+    id: 'inv-4',
+    sku: 'PLT-CTP-THERMAL-SM74',
+    name: 'CTP Thermal Offset Plates (605 x 745 mm)',
+    category: 'Plate',
+    branch_location: 'Main Press',
+    quantity_on_hand: 8, // CRITICAL LOW
+    reorder_threshold: 30,
+    unit_cost: 260,
+    unit_of_measure: 'Plates',
+    supplier_name: 'TechNova Imaging Systems',
+    updated_at: '2026-08-25T09:00:00Z',
+  },
+  {
+    id: 'inv-5',
+    sku: 'INK-CMYK-CYAN-PRO',
+    name: 'Process Cyan Quick-Set Offset Ink (2.5 kg can)',
+    category: 'Ink',
+    branch_location: 'Main Press',
+    quantity_on_hand: 18,
+    reorder_threshold: 10,
+    unit_cost: 850,
+    unit_of_measure: 'Cans',
+    supplier_name: 'Hubergroup India',
+    updated_at: '2026-08-15T14:20:00Z',
+  },
+  {
+    id: 'inv-6',
+    sku: 'INK-CMYK-MAGENTA-PRO',
+    name: 'Process Magenta Quick-Set Ink (2.5 kg can)',
+    category: 'Ink',
+    branch_location: 'Main Press',
+    quantity_on_hand: 15,
+    reorder_threshold: 10,
+    unit_cost: 880,
+    unit_of_measure: 'Cans',
+    supplier_name: 'Hubergroup India',
+    updated_at: '2026-08-15T14:20:00Z',
+  },
+  {
+    id: 'inv-7',
+    sku: 'INK-CMYK-YELLOW-PRO',
+    name: 'Process Yellow Quick-Set Ink (2.5 kg can)',
+    category: 'Ink',
+    branch_location: 'Main Press',
+    quantity_on_hand: 22,
+    reorder_threshold: 10,
+    unit_cost: 840,
+    unit_of_measure: 'Cans',
+    supplier_name: 'Hubergroup India',
+    updated_at: '2026-08-15T14:20:00Z',
+  },
+  {
+    id: 'inv-8',
+    sku: 'INK-CMYK-BLACK-PRO',
+    name: 'Process Intense Black Offset Ink (2.5 kg can)',
+    category: 'Ink',
+    branch_location: 'Main Press',
+    quantity_on_hand: 28,
+    reorder_threshold: 12,
+    unit_cost: 720,
+    unit_of_measure: 'Cans',
+    supplier_name: 'Hubergroup India',
+    updated_at: '2026-08-15T14:20:00Z',
+  },
+  {
+    id: 'inv-9',
+    sku: 'FIN-BOPP-MATTE-30IN',
+    name: 'Thermal BOPP Matte Lamination Roll (30" x 3000m)',
+    category: 'Finishing',
+    branch_location: 'Main Press',
+    quantity_on_hand: 6,
+    reorder_threshold: 5,
+    unit_cost: 3400,
+    unit_of_measure: 'Rolls',
+    supplier_name: 'Cosmo Films Ltd',
+    updated_at: '2026-08-10T12:00:00Z',
+  },
+  {
+    id: 'inv-10',
+    sku: 'CHM-FOUNT-SOLV-20L',
+    name: 'SuperFount Buffer Fountain Solution (20L Drum)',
+    category: 'Chemical',
+    branch_location: 'Main Press',
+    quantity_on_hand: 4,
+    reorder_threshold: 3,
+    unit_cost: 2100,
+    unit_of_measure: 'Drums',
+    supplier_name: 'Flint Group Graphic Supplies',
+    updated_at: '2026-08-12T15:00:00Z',
+  },
+  {
+    id: 'inv-11',
+    sku: 'PAP-DIG-350G-12X18',
+    name: '350 GSM Velvet Matte Card (12" x 18")',
+    category: 'Paper',
+    branch_location: 'Main Press',
+    quantity_on_hand: 50,
+    reorder_threshold: 15,
+    unit_cost: 1650,
+    unit_of_measure: 'Reams',
+    supplier_name: 'ITC PSPD Mills',
+    updated_at: '2026-08-22T14:00:00Z',
+  },
+];
+
+export const INITIAL_PURCHASE_REQUESTS = [
+  {
+    id: 'po-101',
+    po_number: 'PO-2026-088',
+    inventory_item_id: 'inv-4',
+    item_name: 'CTP Thermal Offset Plates (605 x 745 mm)',
+    requested_qty: 50,
+    supplier_name: 'TechNova Imaging Systems',
+    status: 'Ordered',
+    estimated_cost: 13000,
+    created_at: '2026-08-26T09:30:00Z',
+  },
+  {
+    id: 'po-102',
+    po_number: 'PO-2026-089',
+    inventory_item_id: 'inv-2',
+    item_name: '300 GSM Premium Art Card (20" x 30")',
+    requested_qty: 40,
+    supplier_name: 'ITC PSPD Mills',
+    status: 'Requested',
+    estimated_cost: 88000,
+    created_at: '2026-08-27T14:15:00Z',
+  },
+];
+
+export const INITIAL_QUOTES = [
+  {
+    id: 'q-101',
+    quote_number: 'QUO-2026-0142',
+    customer_id: 'cust-1',
+    customer_name: 'Apex Healthcare Pvt Ltd',
+    contact_person: 'Dr. Sameer Malhotra',
+    created_by_user_id: 'usr-2',
+    created_by_name: 'Priya Sharma',
+    status: 'Approved',
+    priority: 'Urgent', // [RUSH ORDER]
+    raw_material_cost: 18450,
+    waste_margin_percent: 10,
+    waste_margin_cost: 1845,
+    press_runtime_cost: 5400,
+    finishing_cost: 3200,
+    rush_surcharge_amount: 4500, // Expedited surcharge
+    total_estimated_price: 33395,
+    advance_required_percent: 60,
+    advance_collected_amount: 20037,
+    valid_until: '2026-09-10',
+    created_at: '2026-08-26T10:00:00Z',
+    items: [
+      {
+        id: 'qi-1',
+        job_title: 'Annual Medical Conference Brochure (16 Pages A4)',
+        print_category: 'Brochure',
+        print_quantity: 3000,
+        paper_type: '130 GSM Gloss Art Paper',
+        paper_gsm: 130,
+        sheet_size: '23" x 36"',
+        color_pages_front: 4,
+        color_pages_back: 4,
+        finishing_specs: 'Matte Lamination Cover, Center Pin Stitching, 3-side Trim',
+        item_subtotal: 33395,
+      }
+    ]
+  },
+  {
+    id: 'q-102',
+    quote_number: 'QUO-2026-0143',
+    customer_id: 'cust-2',
+    customer_name: 'FreshBakes Confectionery',
+    contact_person: 'Anita Deshmukh',
+    created_by_user_id: 'usr-2',
+    created_by_name: 'Priya Sharma',
+    status: 'FollowUp',
+    priority: 'Normal',
+    raw_material_cost: 14200,
+    waste_margin_percent: 8,
+    waste_margin_cost: 1136,
+    press_runtime_cost: 3600,
+    finishing_cost: 4200,
+    rush_surcharge_amount: 0,
+    total_estimated_price: 23136,
+    advance_required_percent: 60,
+    advance_collected_amount: 0,
+    valid_until: '2026-09-05',
+    created_at: '2026-08-27T11:45:00Z',
+    items: [
+      {
+        id: 'qi-2',
+        job_title: 'Gourmet Pastry Box Packaging (Die-Cut & Glued)',
+        print_category: 'Packaging',
+        print_quantity: 5000,
+        paper_type: '300 GSM Premium Art Card',
+        paper_gsm: 300,
+        sheet_size: '20" x 30"',
+        color_pages_front: 4,
+        color_pages_back: 0,
+        finishing_specs: 'Spot UV on Logo, Die Punching, Side Pasting',
+        item_subtotal: 23136,
+      }
+    ]
+  },
+  {
+    id: 'q-103',
+    quote_number: 'QUO-2026-0144',
+    customer_id: 'cust-3',
+    customer_name: 'Horizon EduTech Publishing',
+    contact_person: 'Prof. Ramesh Rao',
+    created_by_user_id: 'usr-2',
+    created_by_name: 'Priya Sharma',
+    status: 'Approved',
+    priority: 'High',
+    raw_material_cost: 68500,
+    waste_margin_percent: 7,
+    waste_margin_cost: 4795,
+    press_runtime_cost: 18000,
+    finishing_cost: 12500,
+    rush_surcharge_amount: 2500,
+    total_estimated_price: 103795,
+    advance_required_percent: 60,
+    advance_collected_amount: 62277,
+    valid_until: '2026-09-15',
+    created_at: '2026-08-25T09:30:00Z',
+    items: [
+      {
+        id: 'qi-3',
+        job_title: 'Grade 10 Mathematics Textbook (240 Pages + Cover)',
+        print_category: 'Book',
+        print_quantity: 2000,
+        paper_type: '80 GSM Maplitho (Inner) + 250 GSM Card (Cover)',
+        paper_gsm: 80,
+        sheet_size: '18" x 23"',
+        color_pages_front: 4,
+        color_pages_back: 4,
+        finishing_specs: 'Gloss Thermal Lamination Cover, Perfect Binding',
+        item_subtotal: 103795,
+      }
+    ]
+  }
+];
+
+export const INITIAL_DESIGN_PROOFS = [
+  {
+    id: 'dp-101',
+    quote_id: 'q-101',
+    job_ticket_number: 'JT-2026-001',
+    job_title: 'Annual Medical Conference Brochure (16 Pages A4)',
+    designer_user_id: 'usr-3',
+    designer_name: 'Kiran Verma',
+    revision_round: 2,
+    proof_file_name: 'Apex_MedConf_Brochure_v2_FinalProof.pdf',
+    checklist_cmyk: true,
+    checklist_dpi: true,
+    checklist_bleed: true,
+    checklist_overprint: true,
+    checklist_fonts: true,
+    client_approval_status: 'Approved',
+    client_feedback: 'Approved with corrections on speaker list. Ready for CTP Plate generation.',
+    approved_at: '2026-08-27T16:30:00Z',
+  },
+  {
+    id: 'dp-102',
+    quote_id: 'q-102',
+    job_ticket_number: 'JT-2026-002',
+    job_title: 'Gourmet Pastry Box Packaging (Die-Cut & Glued)',
+    designer_user_id: 'usr-3',
+    designer_name: 'Kiran Verma',
+    revision_round: 1,
+    proof_file_name: 'FreshBakes_Box_DieKeyline_v1.pdf',
+    checklist_cmyk: true,
+    checklist_dpi: true,
+    checklist_bleed: false,
+    checklist_overprint: true,
+    checklist_fonts: true,
+    client_approval_status: 'RevisionRequested',
+    client_feedback: 'Please expand barcode quiet zone by 3mm and verify die crease lines.',
+    approved_at: null,
+  },
+  {
+    id: 'dp-103',
+    quote_id: 'q-103',
+    job_ticket_number: 'JT-2026-003',
+    job_title: 'Grade 10 Mathematics Textbook',
+    designer_user_id: 'usr-3',
+    designer_name: 'Kiran Verma',
+    revision_round: 2,
+    proof_file_name: 'Horizon_Maths_Book_FinalImposition.pdf',
+    checklist_cmyk: true,
+    checklist_dpi: true,
+    checklist_bleed: true,
+    checklist_overprint: true,
+    checklist_fonts: true,
+    client_approval_status: 'Approved',
+    client_feedback: 'Textbook pages imposed and approved.',
+    approved_at: '2026-08-26T14:00:00Z',
+  }
+];
+
+export const INITIAL_JOB_ORDERS = [
+  {
+    id: 'job-101',
+    job_ticket_number: 'JT-2026-001',
+    quote_id: 'q-101',
+    customer_id: 'cust-1',
+    customer_name: 'Apex Healthcare Pvt Ltd',
+    job_title: 'Annual Medical Conference Brochure (16 Pages A4)',
+    production_type: 'Offset',
+    print_quantity: 3000,
+    paper_details: '130 GSM Gloss Art Paper (23" x 36") - 6.5 Reams',
+    color_spec: '4/4 Front & Back (Process CMYK)',
+    finishing_spec: 'Matte Lamination, Center Stitch, 3-Side Trim',
+    current_stage: 'PressRun', // Actively running on Heidelberg SM 74
+    priority: 'Urgent', // [RUSH CASE]
+    is_rush_order: true,
+    queue_position: 1,
+    assigned_press_machine: 'Lithrone 26 (Kalkere Plant)',
+    assigned_operator: 'Rajesh Nair',
+    target_completion_date: '2026-08-28T18:00:00Z', // Today 6:00 PM!
+    created_at: '2026-08-26T11:00:00Z',
+    advance_paid: 20037,
+    balance_due: 13358,
+  },
+  {
+    id: 'job-102',
+    job_ticket_number: 'JT-2026-002',
+    quote_id: 'q-102',
+    customer_id: 'cust-2',
+    customer_name: 'FreshBakes Confectionery',
+    job_title: 'Gourmet Pastry Box Packaging (5000 Pcs)',
+    production_type: 'Offset',
+    print_quantity: 5000,
+    paper_details: '300 GSM Premium Art Card (20" x 30") - 10 Reams',
+    color_spec: '4/0 Single Side CMYK + Spot Gloss Varnish',
+    finishing_spec: 'Spot UV, Die Punching, Pasting',
+    current_stage: 'PlateMaking', // CTP Trendsetter Q800
+    priority: 'Normal',
+    is_rush_order: false,
+    queue_position: 2,
+    assigned_press_machine: 'Komori Lithrone GL-40 (5-Color + Coater)',
+    assigned_operator: 'Rajesh Nair',
+    target_completion_date: '2026-08-30T17:00:00Z',
+    created_at: '2026-08-27T12:30:00Z',
+    advance_paid: 13880,
+    balance_due: 9256,
+  },
+  {
+    id: 'job-103',
+    job_ticket_number: 'JT-2026-003',
+    quote_id: 'q-103',
+    customer_id: 'cust-3',
+    customer_name: 'Horizon EduTech Publishing',
+    job_title: 'Grade 10 Mathematics Textbook (2000 Copies)',
+    production_type: 'Offset',
+    print_quantity: 2000,
+    paper_details: '80 GSM Maplitho (Inner) + 250 GSM Card (Cover)',
+    color_spec: '1/1 Inner Black + 4/0 Cover CMYK',
+    finishing_spec: 'Thermal Gloss Lamination, Perfect Binding',
+    current_stage: 'FinishingQC', // Cutting & Perfect Binding
+    priority: 'High',
+    is_rush_order: false,
+    queue_position: 3,
+    assigned_press_machine: 'Welbound 6-Clamp Perfect Binding Machine',
+    assigned_operator: 'Anil Kumar',
+    target_completion_date: '2026-08-29T14:00:00Z',
+    created_at: '2026-08-25T10:00:00Z',
+    advance_paid: 62277,
+    balance_due: 41518,
+  },
+  {
+    id: 'job-104',
+    job_ticket_number: 'JT-2026-004',
+    quote_id: null,
+    customer_id: 'cust-4',
+    customer_name: 'UrbanStyle Boutique',
+    job_title: 'Autumn Fashion Lookbook Cards (1000 Sets)',
+    production_type: 'Digital',
+    print_quantity: 1000,
+    paper_details: '350 GSM Velvet Matte Card',
+    color_spec: '4/4 Full Color Digital',
+    finishing_spec: 'Gold Foil Stamping & Round Corner Cutting',
+    current_stage: 'DispatchReady', // Ready for customer pick-up / Porter
+    priority: 'Normal',
+    is_rush_order: false,
+    queue_position: 4,
+    assigned_press_machine: 'Polar 115 EM Guillotine Paper Cutter',
+    assigned_operator: 'Anil Kumar',
+    target_completion_date: '2026-08-28T12:00:00Z',
+    created_at: '2026-08-27T09:00:00Z',
+    advance_paid: 8500,
+    balance_due: 3500,
+  }
+];
+
+export const INITIAL_WORKSTATION_LOGS = [
+  {
+    id: 'log-1',
+    job_order_id: 'job-101',
+    job_ticket_number: 'JT-2026-001',
+    operator_user_id: 'usr-4',
+    operator_name: 'Rajesh Nair',
+    workstation_stage: 'PressRun',
+    machine_name: 'Lithrone 26 (Kalkere Plant)',
+    started_at: '2026-08-28T09:00:00Z',
+    completed_at: null, // In progress
+    good_impressions: 2450,
+    waste_sheets_logged: 45, // Make-ready registration waste
+    operator_notes: 'Registration locked. Running at 11,000 IPH speed. CMYK density 1.45 calibrated.',
+  },
+  {
+    id: 'log-2',
+    job_order_id: 'job-101',
+    job_ticket_number: 'JT-2026-001',
+    operator_user_id: 'usr-3',
+    operator_name: 'Kiran Verma',
+    workstation_stage: 'PlateMaking',
+    machine_name: 'Kodak CTP Thermal Setter',
+    started_at: '2026-08-27T17:00:00Z',
+    completed_at: '2026-08-27T18:15:00Z',
+    good_impressions: 8, // 8 CTP Plates generated (4 Front + 4 Back)
+    waste_sheets_logged: 0,
+    operator_notes: '8 CTP plates exposed, developed, and baked with 175 LPI dot screening.',
+  },
+  {
+    id: 'log-3',
+    job_order_id: 'job-103',
+    job_ticket_number: 'JT-2026-003',
+    operator_user_id: 'usr-4',
+    operator_name: 'Rajesh Nair',
+    workstation_stage: 'PressRun',
+    machine_name: 'Ryobi 660 (Byrathi Plant)',
+    started_at: '2026-08-26T10:00:00Z',
+    completed_at: '2026-08-26T17:30:00Z',
+    good_impressions: 16000,
+    waste_sheets_logged: 120,
+    operator_notes: 'Inner forms 1 to 15 printed clean. Verified sheet squareness.',
+  }
+];
+
+export const INITIAL_MATERIAL_RESERVATIONS = [
+  {
+    id: 'res-1',
+    job_order_id: 'job-101',
+    inventory_item_id: 'inv-1',
+    item_name: '130 GSM Gloss Art Paper (23" x 36")',
+    quantity_reserved: 7,
+    quantity_deducted: 7,
+    is_deducted: true,
+  },
+  {
+    id: 'res-2',
+    job_order_id: 'job-101',
+    inventory_item_id: 'inv-4',
+    item_name: 'CTP Thermal Offset Plates',
+    quantity_reserved: 8,
+    quantity_deducted: 8,
+    is_deducted: true,
+  },
+  {
+    id: 'res-3',
+    job_order_id: 'job-102',
+    inventory_item_id: 'inv-2',
+    item_name: '300 GSM Premium Art Card (20" x 30")',
+    quantity_reserved: 10,
+    quantity_deducted: 0,
+    is_deducted: false, // Pending press run
+  },
+];
+
+export const INITIAL_ISSUES = [
+  {
+    id: 'iss-1',
+    job_order_id: 'job-102',
+    job_ticket_number: 'JT-2026-002',
+    issue_type: 'ColorMismatch',
+    severity: 'Medium',
+    reported_by_name: 'Anil Kumar (QC)',
+    description: 'Special Pantone Warm Red 032 was slightly under-saturated during color pull. Formula adjusted.',
+    resolved: true,
+    created_at: '2026-08-27T15:00:00Z',
+  },
+  {
+    id: 'iss-2',
+    job_order_id: 'job-103',
+    job_ticket_number: 'JT-2026-003',
+    issue_type: 'Shortage',
+    severity: 'Low',
+    reported_by_name: 'Rajesh Nair',
+    description: 'Make-ready consumed 15 extra sheets due to blanket wash restart. Within 5% tolerance.',
+    resolved: true,
+    created_at: '2026-08-26T14:30:00Z',
+  }
+];
+
+export const INITIAL_DISPATCH = [
+  {
+    id: 'disp-101',
+    job_order_id: 'job-104',
+    job_ticket_number: 'JT-2026-004',
+    customer_name: 'UrbanStyle Boutique',
+    contact_phone: '+91 99000 88776',
+    dispatch_method: 'Porter',
+    courier_tracking_no: 'PRT-BLR-89211',
+    vehicle_driver_details: 'Porter 2-Wheeler (Ravi - KA04EG4321)',
+    balance_collected: true,
+    balance_amount: 3500,
+    delivery_status: 'Prepared',
+    proof_of_delivery_signature: null,
+    dispatched_at: '2026-08-28T11:00:00Z',
+    delivered_at: null,
+  }
+];
+
+export const INITIAL_INVOICES = [
+  {
+    id: 'inv-901',
+    invoice_number: 'INV-2026-0891',
+    job_order_id: 'job-101',
+    job_ticket_number: 'JT-2026-001',
+    customer_id: 'cust-1',
+    customer_name: 'Apex Healthcare Pvt Ltd',
+    invoice_type: 'GST_Tax_Invoice',
+    hsn_code: '49111010 (Commercial Catalogues & Brochures)',
+    subtotal: 28895,
+    rush_fee_amount: 4500, // [RUSH EXPEDITED SURCHARGE]
+    taxable_amount: 33395,
+    cgst_percent: 6,
+    cgst_amount: 2003.7,
+    sgst_percent: 6,
+    sgst_amount: 2003.7,
+    igst_amount: 0,
+    grand_total: 37402.4,
+    advance_paid: 20037,
+    balance_due: 17365.4,
+    payment_status: 'Partial',
+    due_date: '2026-09-27',
+    issued_at: '2026-08-28T10:30:00Z',
+  },
+  {
+    id: 'inv-902',
+    invoice_number: 'INV-2026-0892',
+    job_order_id: 'job-104',
+    job_ticket_number: 'JT-2026-004',
+    customer_id: 'cust-4',
+    customer_name: 'UrbanStyle Boutique',
+    invoice_type: 'Non_GST_Bill',
+    hsn_code: '4909 (Printed Cards)',
+    subtotal: 12000,
+    rush_fee_amount: 0,
+    taxable_amount: 12000,
+    cgst_percent: 0,
+    cgst_amount: 0,
+    sgst_percent: 0,
+    sgst_amount: 0,
+    igst_amount: 0,
+    grand_total: 12000,
+    advance_paid: 8500,
+    balance_due: 3500,
+    payment_status: 'Partial',
+    due_date: '2026-08-28',
+    issued_at: '2026-08-27T16:00:00Z',
+  }
+];
+
+export const INITIAL_PAYMENT_RECEIPTS = [
+  {
+    id: 'rec-1',
+    invoice_id: 'inv-901',
+    invoice_number: 'INV-2026-0891',
+    customer_name: 'Apex Healthcare Pvt Ltd',
+    amount_paid: 20037,
+    payment_method: 'UPI_QR',
+    transaction_ref: 'UPI/260826984210/ICICI',
+    payment_date: '2026-08-26T10:45:00Z',
+    receipt_type: 'Advance (60%)',
+  },
+  {
+    id: 'rec-2',
+    invoice_id: 'inv-902',
+    invoice_number: 'INV-2026-0892',
+    customer_name: 'UrbanStyle Boutique',
+    amount_paid: 8500,
+    payment_method: 'Cash',
+    transaction_ref: 'CASH-COUNTER-098',
+    payment_date: '2026-08-27T09:30:00Z',
+    receipt_type: 'Advance (70%)',
+  }
+];
+
+export const INITIAL_CUSTOMER_FEEDBACK = [
+  {
+    id: 'fb-1',
+    job_ticket_number: 'JT-2026-004',
+    customer_name: 'UrbanStyle Boutique',
+    rating_stars: 5,
+    feedback_notes: 'Superb quality gold foiling on the cards and delivered right on time! Will reorder regularly.',
+    created_at: '2026-08-27T17:00:00Z',
+  }
+];
+
+export const INITIAL_TASKS = [
+  {
+    id: 'tsk-1',
+    assigned_to_user_id: 'usr-2',
+    assigned_to_name: 'Priya Sharma',
+    title: 'Follow up on Quote #QUO-2026-0143 (FreshBakes Box Packaging)',
+    task_category: 'QuoteFollowUp',
+    due_date: '2026-08-28T16:00:00Z',
+    priority: 'High',
+    is_completed: false,
+  },
+  {
+    id: 'tsk-2',
+    assigned_to_user_id: 'usr-3',
+    assigned_to_name: 'Kiran Verma',
+    title: 'Verify Bleed & Imposition for Grade 10 Math Textbook Cover',
+    task_category: 'DesignReview',
+    due_date: '2026-08-28T14:00:00Z',
+    priority: 'Normal',
+    is_completed: true,
+  },
+  {
+    id: 'tsk-3',
+    assigned_to_user_id: 'usr-6',
+    assigned_to_name: 'Sunita Rao',
+    title: 'Follow up for 45-day overdue balance payment from Horizon EduTech',
+    task_category: 'PaymentChase',
+    due_date: '2026-08-29T11:00:00Z',
+    priority: 'Escalated',
+    is_completed: false,
+  }
+];
+
+export const INITIAL_ALERTS = [
+  {
+    id: 'alt-1',
+    alert_type: 'RushOrderAlert',
+    severity: 'Critical',
+    message: '[RUSH ORDER ALERT] Job #JT-2026-001 (Apex Healthcare 3000 Brochures) is due TODAY by 6:00 PM.',
+    timestamp: '2026-08-28T09:00:00Z',
+    is_read: false,
+  },
+  {
+    id: 'alt-2',
+    alert_type: 'StockAlert',
+    severity: 'Warning',
+    message: '[LOW STOCK WARNING] CTP Thermal Offset Plates (SM 74) at 8 plates (Threshold: 30). PO #PO-2026-088 ordered.',
+    timestamp: '2026-08-28T08:30:00Z',
+    is_read: false,
+  },
+  {
+    id: 'alt-3',
+    alert_type: 'PaymentAlert',
+    severity: 'Warning',
+    message: '[CREDIT ALERT] Horizon EduTech current balance is Rs 1,12,000 against Rs 5,00,000 credit limit (22% utilized).',
+    timestamp: '2026-08-27T18:00:00Z',
+    is_read: true,
+  }
+];
+
+export const INITIAL_ENQUIRIES = [
+  { id: 'enq-1', date: '02-06-2025', expected_delivery: '04-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Nicey', customer_name: 'Ayush', phone: '9980612998', job_specification: 'Book 1 nos 240x240 96 pages Cover 300GSM...', amount: 2400, amount_note: '', prepress: 'Aruna', dn_no: '597', advance_remarks: 'Full paid', status: 'Completed', is_starred: false, costing_status: 'Costed', support_notes: 'Urgent delivery needed for school event', current_stage: 'Delivered' },
+  { id: 'enq-2', date: '02-06-2025', expected_delivery: '04-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Nicey', customer_name: 'Mounesh', phone: '8792783683', job_specification: 'Stickers (Ready to print) Size: 15x7.5 cm...', amount: 1200, amount_note: '(with edits 1500)', prepress: '-', dn_no: '-', advance_remarks: 'Cancelled', status: 'Cancelled', is_starred: false, costing_status: 'Cancelled', support_notes: 'Customer changed requirements', current_stage: 'Cancelled' },
+  { id: 'enq-3', date: '02-06-2025', expected_delivery: '05-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Nicey', customer_name: 'Naveen', phone: '7349091878', job_specification: 'Stickers - Ready to print Size - 60x150mm...', amount: 3000, amount_note: '(with lamination 3600)', prepress: '-', dn_no: '-', advance_remarks: 'Cancelled', status: 'Cancelled', is_starred: false, costing_status: 'Cancelled', support_notes: 'Price negotiation failed', current_stage: 'Cancelled' },
+  { id: 'enq-4', date: '02-06-2025', expected_delivery: '05-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Nicey', customer_name: 'Nicholas', phone: '9980228785', job_specification: 'Baptism Cards Size - 6x4 100 nos 300 GSM...', amount: 2200, amount_note: '', prepress: 'Aruna', dn_no: '599', advance_remarks: '1000 paid cash', status: 'Completed', is_starred: false, costing_status: 'Costed', support_notes: 'Gold foil finish requested', current_stage: 'Delivered' },
+  { id: 'enq-5', date: '02-06-2025', expected_delivery: '04-06-2025', source: 'Walk-in', customer_type: 'Corporate', quote_assigned_to: 'Krishnamani', customer_name: 'Star Innovative', phone: '8310661442', job_specification: 'Business cards 300GSM F/B 100 Nos...', amount: 400, amount_note: '', prepress: 'Aruna', dn_no: '601', advance_remarks: 'Full paid Gp', status: 'Completed', is_starred: false, costing_status: 'Costed', support_notes: 'Repeat company profile order', current_stage: 'Delivered' },
+  { id: 'enq-6', date: '02-06-2025', expected_delivery: '04-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Krishnamani', customer_name: 'Mujeeb', phone: '9030252486', job_specification: 'A4 Size Letter heads S/S 50 Nos. Business...', amount: 400, amount_note: '', prepress: 'Karthik', dn_no: '606', advance_remarks: 'Full Paid Cash', status: 'Completed', is_starred: false, costing_status: 'Costed', support_notes: '100 GSM Executive bond paper', current_stage: 'Delivered' },
+  { id: 'enq-7', date: '02-06-2025', expected_delivery: '03-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Krishnamani', customer_name: 'Ram', phone: '9845149339', job_specification: 'Cromo stickers 16x4 inches 2sheets', amount: 230, amount_note: '', prepress: 'Girish', dn_no: '605', advance_remarks: 'Full paid Gp', status: 'Completed', is_starred: false, costing_status: 'Costed', support_notes: 'Ready file provided', current_stage: 'Delivered' },
+  { id: 'enq-8', date: '02-06-2025', expected_delivery: '05-06-2025', source: 'Walk-in', customer_type: 'Corporate', quote_assigned_to: 'Krishnamani', customer_name: 'Supreme enterprises', phone: '9686193025', job_specification: 'Visiting Cards 300GSM F/B 500 Nos...', amount: 410, amount_note: '', prepress: 'Anand', dn_no: '612', advance_remarks: 'Full Paid Cash', status: 'Completed', is_starred: false, costing_status: 'Costed', support_notes: 'Thermal Matte Lamination', current_stage: 'Delivered' },
+  { id: 'enq-9', date: '02-06-2025', expected_delivery: '06-06-2025', source: 'Phone', customer_type: 'Reseller', quote_assigned_to: 'Krishnamani', customer_name: 'Global Holidays', phone: '9538638602', job_specification: 'Stickers Gloss Die-cut Printing', amount: 800, amount_note: '800, 2,000', prepress: '-', dn_no: '-', advance_remarks: '-', status: 'Pending', is_starred: false, costing_status: 'Costing In-Progress', support_notes: 'Needs confirmation on die shape', current_stage: 'Costing' },
+  { id: 'enq-10', date: '03-06-2025', expected_delivery: '05-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Pavithra', customer_name: 'Blooming Kids', phone: '9980760311', job_specification: 'Cromo stickers with half cutting Environment Day', amount: 500, amount_note: '', prepress: 'Aruna', dn_no: '-', advance_remarks: '500 Cash', status: 'Pending', is_starred: false, costing_status: 'Costed', support_notes: 'School stickers', current_stage: 'Finishing' },
+  { id: 'enq-11', date: '03-06-2025', expected_delivery: '07-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Pavithra', customer_name: 'Naganath', phone: '9686780076', job_specification: 'Tron - Party Supply Screen Ptg or Spot UV Stickers.', amount: 0, amount_note: '-', prepress: '-', dn_no: '-', advance_remarks: '-', status: 'Enquiry', is_starred: false, costing_status: 'Awaiting Costing', support_notes: 'Outsourced Spot UV costing pending', current_stage: 'Pre-Press' },
+  { id: 'enq-12', date: '03-06-2025', expected_delivery: '08-06-2025', source: 'Walk-in', customer_type: 'Corporate', quote_assigned_to: 'Krishnamani', customer_name: 'Keval', phone: '8000080435', job_specification: 'Cromo Stickers 5x4 inches. Ready file. 10000 nos.', amount: 10000, amount_note: '', prepress: 'Anand', dn_no: '-', advance_remarks: '10000Gp', status: 'Pending', is_starred: false, costing_status: 'Costed', support_notes: 'High volume offset run', current_stage: 'Press / Printing' },
+  { id: 'enq-13', date: '03-06-2025', expected_delivery: '06-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Pavithra', customer_name: 'Ganesh', phone: '9901110147', job_specification: 'Parking Stickers. Bike - 56mm x 56mm - 100 nos...', amount: 900, amount_note: '900, 1,100, 900', prepress: 'Aruna', dn_no: '-', advance_remarks: '1500', status: 'Pending', is_starred: false, costing_status: 'Costed', support_notes: 'Outdoor water resistant ink', current_stage: 'Finishing' },
+  { id: 'enq-14', date: '03-06-2025', expected_delivery: '07-06-2025', source: 'Walk-in', customer_type: 'Corporate', quote_assigned_to: 'Pavithra', customer_name: 'Vinod (Ayodhya Residency)', phone: '9535024617', job_specification: 'VC Ayodhya Residency. 1000 nos. S/S 300 gsm... Total 5 Jobs. Amount: 5450', amount: 1050, amount_note: '', prepress: '-', dn_no: '-', advance_remarks: 'Ad 2000Gp', status: 'Pending', is_starred: true, costing_status: 'Costed', support_notes: 'Corporate rate applied', current_stage: 'QC & Packaging' },
+  { id: 'enq-15', date: '03-06-2025', expected_delivery: '08-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Pavithra', customer_name: 'Cash Bill Customer', phone: '9845011223', job_specification: 'Cash Bill. S/B 1+1 1/8th. W 5bk P SL 001.', amount: 1000, amount_note: '', prepress: '-', dn_no: '-', advance_remarks: '-', status: 'Pending', is_starred: false, costing_status: 'Costed', support_notes: 'Duplicate numbering specification', current_stage: 'Order Desk' },
+  { id: 'enq-16', date: '03-06-2025', expected_delivery: '09-06-2025', source: 'Phone', customer_type: 'Corporate', quote_assigned_to: 'Pavithra', customer_name: 'Metro Retail Mart', phone: '9845112233', job_specification: 'Brochure Tri-fold 170 GSM Art Paper with Aqueous Coating 5000 Nos', amount: 0, amount_note: '-', prepress: '-', dn_no: '-', advance_remarks: '-', status: 'Enquiry', is_starred: false, costing_status: 'Awaiting Costing', support_notes: 'Special coating and creasing required', current_stage: 'Costing' },
+  { id: 'enq-17', date: '03-06-2025', expected_delivery: '10-06-2025', source: 'Walk-in', customer_type: 'Corporate', quote_assigned_to: 'Krishnamani', customer_name: 'Starlight Tech Solutions', phone: '9980334455', job_specification: 'Hardcover Product Catalogues (64 pages) + Gold Foil Stamp 1000 Nos', amount: 0, amount_note: '-', prepress: '-', dn_no: '-', advance_remarks: '-', status: 'Enquiry', is_starred: true, costing_status: 'Awaiting Costing', support_notes: 'Section sewing and gold foil block preparation pending', current_stage: 'Costing' },
+];
+
+// PDF Page 9: Delivery Workspace - Route-Wise Dispatch Queue & Vehicles
+export const INITIAL_DISPATCH_ROUTES = [
+  { id: 'route-1', name: 'Route 1 - North Bengaluru', jobs_count: 8, total_qty: 3500, total_amount: 48900, status: 'Active' },
+  { id: 'route-2', name: 'Route 2 - Indiranagar', jobs_count: 5, total_qty: 1500, total_amount: 21300, status: 'Active' },
+  { id: 'route-3', name: 'Route 3 - Koramangala', jobs_count: 4, total_qty: 2200, total_amount: 32700, status: 'Active' },
+  { id: 'route-4', name: 'Route 4 - Whitefield', jobs_count: 3, total_qty: 900, total_amount: 12450, status: 'Active' },
+  { id: 'route-5', name: 'Unassigned Route', jobs_count: 2, total_qty: 600, total_amount: 8800, status: 'Pending' },
+];
+
+export const INITIAL_ROUTE_JOBS = [
+  { id: 'rj-1', route_id: 'route-1', job_no: 'JO-1024', customer: 'Star Innovative', product: 'Brochure', route_qty: 2000, dispatched: 0, balance: 2000, cod_amount: 4500, ack_status: 'Pending', status: 'Pending' },
+  { id: 'rj-2', route_id: 'route-1', job_no: 'JO-1025', customer: 'Blooming Kids', product: 'Books', route_qty: 1500, dispatched: 500, balance: 1000, cod_amount: 3800, ack_status: 'Pending', status: 'Pending' },
+  { id: 'rj-3', route_id: 'route-1', job_no: 'JO-1026', customer: 'Ayodhya Residency', product: 'Flyers', route_qty: 750, dispatched: 0, balance: 750, cod_amount: 2200, ack_status: 'Pending', status: 'Pending' },
+  { id: 'rj-4', route_id: 'route-1', job_no: 'JO-1027', customer: 'Global Holidays', product: 'Catalog', route_qty: 1200, dispatched: 200, balance: 1000, cod_amount: 3300, ack_status: 'Pending', status: 'Pending' },
+  { id: 'rj-5', route_id: 'route-1', job_no: 'JO-1028', customer: 'Supreme Enterprises', product: 'Booklets', route_qty: 500, dispatched: 500, balance: 0, cod_amount: 1100, ack_status: 'Confirmed', status: 'Delivered' },
+  { id: 'rj-6', route_id: 'route-1', job_no: 'JO-1029', customer: 'ABC Traders', product: 'Posters', route_qty: 600, dispatched: 0, balance: 600, cod_amount: 1200, ack_status: 'Pending', status: 'Pending' },
+  { id: 'rj-7', route_id: 'route-1', job_no: 'JO-1030', customer: 'Sri Lakshmi Stores', product: 'Leaflets', route_qty: 800, dispatched: 200, balance: 600, cod_amount: 1700, ack_status: 'Pending', status: 'Pending' },
+  { id: 'rj-8', route_id: 'route-1', job_no: 'JO-1031', customer: 'Dream Homes', product: 'Brochure', route_qty: 700, dispatched: 0, balance: 700, cod_amount: 1000, ack_status: 'Pending', status: 'Pending' },
+  // Route 2 Indiranagar
+  { id: 'rj-9', route_id: 'route-2', job_no: 'JO-1032', customer: 'FreshBakes Confectionery', product: 'Pastry Boxes', route_qty: 1500, dispatched: 1500, balance: 0, cod_amount: 6200, ack_status: 'Confirmed', status: 'Delivered' },
+  { id: 'rj-10', route_id: 'route-2', job_no: 'JO-1033', customer: 'Indira Boutique', product: 'Tags', route_qty: 800, dispatched: 0, balance: 800, cod_amount: 2400, ack_status: 'Pending', status: 'Pending' },
+  // Route 3 Koramangala
+  { id: 'rj-11', route_id: 'route-3', job_no: 'JO-1034', customer: 'Apex Healthcare Pvt Ltd', product: 'Medical Conference Brochure', route_qty: 3000, dispatched: 0, balance: 3000, cod_amount: 13358, ack_status: 'Pending', status: 'Ready' },
+];
+
+export const INITIAL_VEHICLES = [
+  { id: 'veh-1', reg_no: 'KA 03 AB 1234', driver_name: 'Ramesh', driver_phone: '+91 98450 99881', vehicle_type: 'Tata Ace (1.5 Ton)', capacity_boxes: 60, status: 'Available' },
+  { id: 'veh-2', reg_no: 'KA 04 CD 5678', driver_name: 'Suresh Kumar', driver_phone: '+91 98450 99882', vehicle_type: 'Mahindra Bolero Maxi', capacity_boxes: 90, status: 'On Trip' },
+  { id: 'veh-3', reg_no: 'KA 51 EF 9012', driver_name: 'Manjunath', driver_phone: '+91 98450 99883', vehicle_type: 'Electric 3-Wheeler Loader', capacity_boxes: 30, status: 'Available' },
+];
+
+export const INITIAL_TRIP_SHEETS = [
+  {
+    id: 'trip-101',
+    trip_number: 'TS-2026-042',
+    route_id: 'route-1',
+    route_name: 'Route 1 - North Bengaluru',
+    driver_name: 'Ramesh',
+    vehicle_reg: 'KA 03 AB 1234',
+    trip_date: '2026-06-19',
+    selected_job_ids: ['JO-1024', 'JO-1025', 'JO-1026', 'JO-1027'],
+    total_qty: 4750,
+    total_cod: 13800,
+    status: 'In-Transit',
+    created_at: '2026-06-19T08:30:00Z',
+  }
+];
+
+// PDF Page 10: Master Dashboard Owner View Metrics
+export const INITIAL_OWNER_METRICS = {
+  daily_scan: {
+    total_tracked: 46,
+    on_track: 27,
+    attention: 11,
+    action_needed: 8,
+  },
+  order_desk: {
+    owner: 'Order Desk Lead',
+    daily: [
+      { metric: 'New enquiries', target: 10, today: 12, status: 'success' },
+      { metric: 'Quotes sent', target: 8, today: 9, status: 'success' },
+      { metric: 'Orders confirmed', target: 5, today: 4, status: 'warning' },
+      { metric: 'Pending enquiries >24 hrs', target: 0, today: 2, status: 'danger' },
+      { metric: 'Customer complaints', target: 0, today: 0, status: 'success' },
+    ],
+    weekly: [
+      { metric: 'Conversion trend', target: '>= 20%', this_week: '18%', status: 'warning' },
+      { metric: 'Missed follow-up', target: 0, this_week: 3, status: 'danger' },
+      { metric: 'Repeat customers', target: 'Increase', this_week: '72%', status: 'success' },
+    ]
+  },
+  prepress: {
+    owner: 'Prepress Lead',
+    daily: [
+      { metric: 'Files received', target: 15, today: 17, status: 'success' },
+      { metric: 'Files processed', target: 15, today: 14, status: 'warning' },
+      { metric: 'Files pending', target: 0, today: 3, status: 'warning' },
+      { metric: 'Errors / reworks identified', target: 0, today: 1, status: 'danger' },
+      { metric: 'Urgent jobs handled', target: 'Priority', today: 1, status: 'success' },
+    ],
+    weekly: [
+      { metric: 'Error rate', target: '<= 2%', this_week: '1.8%', status: 'success' },
+      { metric: 'Avg processing time', target: '2 hrs', this_week: '2.5 hrs', status: 'warning' },
+      { metric: 'Rework source identified', target: '100%', this_week: 'Yes', status: 'success' },
+    ]
+  },
+  production: {
+    owner: 'Production Supervisor',
+    daily: [
+      { metric: 'Jobs scheduled', target: 20, today: 22, status: 'success' },
+      { metric: 'Jobs completed', target: 18, today: 16, status: 'warning' },
+      { metric: 'Delayed jobs', target: 0, today: 2, status: 'danger' },
+      { metric: 'Machine downtime', target: '<= 2%', today: '1.5%', status: 'success' },
+      { metric: 'Labour utilisation', target: '>= 75%', today: '72%', status: 'warning' },
+    ],
+    weekly: [
+      { metric: 'On-time production %', target: '>= 90%', this_week: '88%', status: 'warning' },
+      { metric: 'Output vs capacity', target: '>= 95%', this_week: '96%', status: 'success' },
+      { metric: 'Quality reworks %', target: '<= 2%', this_week: '1.2%', status: 'success' },
+    ]
+  },
+  dispatch: {
+    owner: 'Dispatch In-charge',
+    daily: [
+      { metric: 'Jobs ready for dispatch', target: 8, today: 9, status: 'success' },
+      { metric: 'Jobs dispatched', target: 8, today: 7, status: 'warning' },
+      { metric: 'Pending dispatch', target: 0, today: 2, status: 'warning' },
+      { metric: 'Delivery delays', target: 0, today: 1, status: 'danger' },
+      { metric: 'Wrong deliveries', target: 0, today: 0, status: 'success' },
+    ],
+    weekly: [
+      { metric: 'On-time delivery %', target: '>= 95%', this_week: '93%', status: 'warning' },
+      { metric: 'Delivery complaints', target: 0, this_week: 1, status: 'warning' },
+      { metric: 'Damage / loss %', target: '<= 1%', this_week: '0.5%', status: 'success' },
+    ]
+  },
+  accounts: {
+    owner: 'Accountant',
+    daily: [
+      { metric: 'Payment received', target: 'Target', today: 'Rs 3.00 L', status: 'success' },
+      { metric: 'Pending collection', target: 'List', today: 'Rs 4.35 L', status: 'warning' },
+      { metric: 'Urgent follow-ups', target: 'Highlight', today: 2, status: 'danger' },
+    ],
+    weekly: [
+      { metric: 'Outstanding >30 days', target: '<= Rs 2.00 L', this_week: 'Rs 2.75 L', status: 'danger' },
+      { metric: 'Cash flow status', target: 'Positive', this_week: 'Positive', status: 'success' },
+      { metric: 'Bank reconciliation', target: '100%', this_week: '100%', status: 'success' },
+    ]
+  }
+};
+
+// Module 2: Customer Support & Costing Coordination
+export const INITIAL_COSTING_REQUESTS = [
+  {
+    id: 'cost-1',
+    enquiry_id: 'enq-9',
+    customer_name: 'Global Holidays',
+    job_title: 'Stickers Gloss Die-cut Printing',
+    specs_summary: 'Die-cut glossy stickers 15x7.5 cm, 1500 units, thermal adhesive',
+    assigned_estimator: 'Priya Sharma',
+    status: 'In-Progress',
+    clarification_notes: 'Awaiting customer response on roll format vs cut sheets',
+    priority: 'Normal',
+    created_at: '2026-06-02T11:00:00Z',
+    internal_notes: 'Screen printing white under-base required if dark background',
+  },
+  {
+    id: 'cost-2',
+    enquiry_id: 'enq-11',
+    customer_name: 'Naganath',
+    job_title: 'Tron - Party Supply Screen Ptg or Spot UV Stickers',
+    specs_summary: 'Screen printing with spot UV highlight, 800 units',
+    assigned_estimator: 'Kiran Verma',
+    status: 'Awaiting Costing',
+    clarification_notes: 'Associate outsourced spot UV vendor quotation pending',
+    priority: 'Urgent',
+    created_at: '2026-06-03T10:30:00Z',
+    internal_notes: 'Coordinate with Sri Venkateshwara UV Coaters for rate per sheet',
+  },
+  {
+    id: 'cost-3',
+    enquiry_id: 'enq-15',
+    customer_name: 'Cash Bill Customer',
+    job_title: 'Cash Bill Book S/B 1+1 1/8th W 5bk P SL 001',
+    specs_summary: '1+1 Duplicate serial numbering, 5 books, 58 GSM Maplitho + Pink carbonless',
+    assigned_estimator: 'Priya Sharma',
+    status: 'Costed',
+    clarification_notes: 'Approved standard rate slab',
+    priority: 'Normal',
+    created_at: '2026-06-03T14:10:00Z',
+    internal_notes: 'Binding team allocated for manual perforating & stitching',
+  }
+];
+
+// Module 4: Sales Order Booking & Confirmation
+export const INITIAL_SALES_BOOKINGS = [
+  {
+    id: 'sb-101',
+    booking_number: 'SO-2026-0811',
+    quote_id: 'q-101',
+    customer_id: 'cust-1',
+    customer_name: 'Apex Healthcare Pvt Ltd',
+    customer_po_ref: 'PO-AH-2026-991',
+    arc_number: 'ARC-2026-HCP-01',
+    confirmation_channel: 'Email',
+    confirmation_date: '2026-08-26',
+    order_total: 33395,
+    advance_required: 20037, // 60% advance gate
+    advance_received: 20037,
+    balance_pending: 13358,
+    booking_status: 'Booked', // Draft, Awaiting PO/ARC, Awaiting Advance, Booked, Cancelled
+    production_release: true,
+    refund_applicable: false,
+    created_at: '2026-08-26T14:00:00Z',
+  },
+  {
+    id: 'sb-102',
+    booking_number: 'SO-2026-0812',
+    quote_id: 'q-102',
+    customer_id: 'cust-2',
+    customer_name: 'FreshBakes Confectionery',
+    customer_po_ref: 'FB-WA-CONFIRM-441',
+    arc_number: null,
+    confirmation_channel: 'WhatsApp',
+    confirmation_date: '2026-08-27',
+    order_total: 26890,
+    advance_required: 16134, // 60%
+    advance_received: 16134,
+    balance_pending: 10756,
+    booking_status: 'Booked',
+    production_release: true,
+    refund_applicable: false,
+    created_at: '2026-08-27T11:30:00Z',
+  },
+  {
+    id: 'sb-103',
+    booking_number: 'SO-2026-0813',
+    quote_id: 'q-103',
+    customer_id: 'cust-3',
+    customer_name: 'Horizon EduTech Publishing',
+    customer_po_ref: 'ARC-HORIZON-2026-09',
+    arc_number: 'ARC-HORIZON-2026-09',
+    confirmation_channel: 'Email',
+    confirmation_date: '2026-08-27',
+    order_total: 78200,
+    advance_required: 0, // Contract credit bill customer
+    advance_received: 0,
+    balance_pending: 78200,
+    booking_status: 'Booked',
+    production_release: true,
+    refund_applicable: false,
+    created_at: '2026-08-27T16:00:00Z',
+  },
+  {
+    id: 'sb-104',
+    booking_number: 'SO-2026-0814',
+    quote_id: 'q-104',
+    customer_id: 'cust-4',
+    customer_name: 'UrbanStyle Boutique',
+    customer_po_ref: null,
+    arc_number: null,
+    confirmation_channel: 'WhatsApp',
+    confirmation_date: '2026-08-28',
+    order_total: 12200,
+    advance_required: 7320, // 60%
+    advance_received: 0,
+    balance_pending: 12200,
+    booking_status: 'Awaiting Advance',
+    production_release: false,
+    refund_applicable: false,
+    created_at: '2026-08-28T10:00:00Z',
+  }
+];
+
+// Module 5: Prepress & Artwork Approval
+export const INITIAL_PREPRESS_JOBS = [
+  {
+    id: 'prep-1',
+    job_ticket_number: 'JT-2026-001',
+    customer_name: 'Apex Healthcare Pvt Ltd',
+    artwork_type: 'New Design', // Party File, Party File with Editing, New Design, Repeat Job, Repeat Job with Editing
+    assigned_designer: 'Kiran Verma',
+    revision_count: 2,
+    current_version: 'V2',
+    proof_shared_channel: 'Email',
+    proof_shared_date: '2026-08-26',
+    customer_approval_status: 'Approved',
+    approved_date: '2026-08-26T16:30:00Z',
+    approval_mode: 'Email Written Sign-off',
+    production_release_authorized: true,
+    ctp_plates_generated: 4,
+    notes: 'Approved with Pantone Medical Cyan adjustment',
+  },
+  {
+    id: 'prep-2',
+    job_ticket_number: 'JT-2026-002',
+    customer_name: 'FreshBakes Confectionery',
+    artwork_type: 'Party File with Editing',
+    assigned_designer: 'Aruna',
+    revision_count: 3,
+    current_version: 'V3',
+    proof_shared_channel: 'WhatsApp',
+    proof_shared_date: '2026-08-27',
+    customer_approval_status: 'Approved',
+    approved_date: '2026-08-27T14:15:00Z',
+    approval_mode: 'WhatsApp Confirmation',
+    production_release_authorized: true,
+    ctp_plates_generated: 4,
+    notes: 'Die-line layer added for custom window cut',
+  },
+  {
+    id: 'prep-3',
+    job_ticket_number: 'JT-2026-003',
+    customer_name: 'Horizon EduTech Publishing',
+    artwork_type: 'Repeat Job with Editing',
+    assigned_designer: 'Girish',
+    revision_count: 1,
+    current_version: 'V1',
+    proof_shared_channel: 'Email',
+    proof_shared_date: '2026-08-27',
+    customer_approval_status: 'Pending Customer Review',
+    approved_date: null,
+    approval_mode: null,
+    production_release_authorized: false,
+    ctp_plates_generated: 0,
+    notes: 'Spine thickness adjusted for 180 pages calculation',
+  }
+];
+
+// Module 8: Finishing Operations
+export const INITIAL_FINISHING_OPS = [
+  {
+    id: 'fin-op-1',
+    job_ticket_number: 'JT-2026-001',
+    activity_type: 'Lamination', // Cutting, Folding, Lamination, Binding, Punching, Pasting
+    workcenter: 'Thermal Laminator 30"',
+    operator_name: 'Anil Kumar',
+    status: 'In-Progress',
+    planned_qty: 3000,
+    completed_qty: 1800,
+    wastage_qty: 35,
+    quality_issues: 'None',
+    started_at: '2026-08-28T09:00:00Z',
+    is_subcontract: false,
+  },
+  {
+    id: 'fin-op-2',
+    job_ticket_number: 'JT-2026-001',
+    activity_type: 'Folding & Center Pin Stitching',
+    workcenter: 'Heidelberg Folder & Stitcher',
+    operator_name: 'Anil Kumar',
+    status: 'Pending',
+    planned_qty: 3000,
+    completed_qty: 0,
+    wastage_qty: 0,
+    quality_issues: 'None',
+    started_at: null,
+    is_subcontract: false,
+  },
+  {
+    id: 'fin-op-3',
+    job_ticket_number: 'JT-2026-002',
+    activity_type: 'Die Punching',
+    workcenter: 'Automatic Die Cutting Unit',
+    operator_name: 'Ramu',
+    status: 'Completed',
+    planned_qty: 5000,
+    completed_qty: 5020,
+    wastage_qty: 45,
+    quality_issues: 'None',
+    started_at: '2026-08-27T13:00:00Z',
+    is_subcontract: false,
+  },
+  {
+    id: 'fin-op-4',
+    job_ticket_number: 'JT-2026-004',
+    activity_type: 'Gold Foil Stamping',
+    workcenter: 'Associate - Sri Venkateshwara Foiling',
+    operator_name: 'Outsourced Partner',
+    status: 'Completed',
+    planned_qty: 500,
+    completed_qty: 500,
+    wastage_qty: 10,
+    quality_issues: 'None',
+    started_at: '2026-08-26T15:00:00Z',
+    is_subcontract: true,
+  }
+];
+
+// Module 9: Associate / Outsourced Production Management
+export const INITIAL_ASSOCIATES = [
+  {
+    id: 'asc-1',
+    associate_name: 'Sri Venkateshwara Foiling & UV',
+    contact_person: 'Venkatesh',
+    phone: '+91 98455 11223',
+    process_types: ['Spot UV', 'Gold / Silver Foiling', 'Drip-Off Coating'],
+    location: 'Chamarajpet, Bangalore',
+    rating: 4.8,
+  },
+  {
+    id: 'asc-2',
+    associate_name: 'Maruthi Hard-Case Book Binders',
+    contact_person: 'Maruthi Rao',
+    phone: '+91 98455 33445',
+    process_types: ['Hardcase Binding', 'Section Sewing', 'Edge Gilding'],
+    location: 'Sultanpet, Bangalore',
+    rating: 4.6,
+  },
+  {
+    id: 'asc-3',
+    associate_name: 'Karnataka Screen Art Printers',
+    contact_person: 'Santhosh',
+    phone: '+91 98455 55667',
+    process_types: ['Manual Screen Printing', 'Scratch-off Coating'],
+    location: 'Rajajinagar, Bangalore',
+    rating: 4.5,
+  }
+];
+
+export const INITIAL_OUTSOURCE_CHALLANS = [
+  {
+    id: 'osc-101',
+    challan_number: 'DC-OUT-2026-018',
+    job_ticket_number: 'JT-2026-004',
+    associate_id: 'asc-1',
+    associate_name: 'Sri Venkateshwara Foiling & UV',
+    process_description: 'Metallic Gold Hot Foil Stamping on 500 Visiting Cards',
+    quantity_sent: 520,
+    quantity_received: 500,
+    quantity_rejected: 10,
+    outsource_cost: 1400,
+    status: 'Completed',
+    sent_date: '2026-08-26',
+    received_date: '2026-08-27',
+  },
+  {
+    id: 'osc-102',
+    challan_number: 'DC-OUT-2026-019',
+    job_ticket_number: 'JT-2026-003',
+    associate_id: 'asc-2',
+    associate_name: 'Maruthi Hard-Case Book Binders',
+    process_description: 'Hardcase Section Sewn Cloth Binding with Embossing',
+    quantity_sent: 1500,
+    quantity_received: 0,
+    quantity_rejected: 0,
+    outsource_cost: 28500,
+    status: 'In-Progress',
+    sent_date: '2026-08-28',
+    received_date: null,
+  }
+];
+
+// Module 10: Excess-to-Stock Hand-off from QC / Packing
+export const INITIAL_EXCESS_STOCK = [
+  {
+    id: 'exs-1',
+    job_ticket_number: 'JT-2026-002',
+    product_name: 'Pastry Box 250g (Food-Grade Board)',
+    quantity: 120, // Excess produced over 5000 ordered
+    handed_off_by: 'Anil Kumar (QC Lead)',
+    bin_location: 'BIN-FG-04',
+    status: 'In-Stock',
+    reuse_notes: 'Available for future FreshBakes repeat re-order or sample packs',
+    created_at: '2026-08-27T18:00:00Z',
+  },
+  {
+    id: 'exs-2',
+    job_ticket_number: 'JT-2026-004',
+    product_name: 'Luxury Velvet Touch Business Cards',
+    quantity: 50,
+    handed_off_by: 'Anil Kumar (QC Lead)',
+    bin_location: 'BIN-SAMPLE-01',
+    status: 'Allocated to Samples',
+    reuse_notes: 'Display samples for sales showroom',
+    created_at: '2026-08-27T16:30:00Z',
+  }
+];
+
+// Module 15: Customer Review, Rejection, Replacement & Refund
+export const INITIAL_CUSTOMER_REJECTIONS = [
+  {
+    id: 'rej-1',
+    rejection_number: 'CR-2026-005',
+    job_ticket_number: 'JT-2026-002',
+    invoice_number: 'INV-2026-0891',
+    customer_name: 'FreshBakes Confectionery',
+    rejection_reason: 'Color Mismatch / Faded Magenta on Box Flap',
+    responsible_department: 'Production - Ryobi 660',
+    evidence_notes: 'Customer reported pantone strawberry tint looked brown on 200 boxes',
+    qc_investigation_result: 'Ink fountain dampening solution level was excessive during tail-end of press run',
+    decision: 'Replace', // Replace or Refund
+    replacement_job_ticket: 'JT-2026-002-R',
+    refund_amount: 0,
+    refund_status: 'N/A',
+    corrective_action: 'Calibrated color density sensor; press operator briefed on alcohol fountain stability',
+    status: 'Replacement In-Production',
+    created_at: '2026-08-28T11:00:00Z',
+  },
+  {
+    id: 'rej-2',
+    rejection_number: 'CR-2026-004',
+    job_ticket_number: 'JT-2026-000-OLD',
+    invoice_number: 'INV-2026-0880',
+    customer_name: 'Metro Retail Mart',
+    rejection_reason: 'Damaged in transit due to heavy rain packaging rupture',
+    responsible_department: 'Dispatch & Delivery',
+    evidence_notes: 'Corrugated cartons got wet during bike delivery run',
+    qc_investigation_result: 'Plastic waterproof stretch film was skipped due to rush',
+    decision: 'Refund',
+    replacement_job_ticket: null,
+    refund_amount: 3200,
+    refund_status: 'Refund Approved & Processed',
+    corrective_action: 'Mandatory double shrink-wrapping for all monsoon deliveries',
+    status: 'Closed',
+    created_at: '2026-08-24T14:30:00Z',
+  }
+];
+
+// Module 16: Notification & Communication Automation
+export const INITIAL_NOTIFICATIONS_LOG = [
+  {
+    id: 'notif-1',
+    recipient_name: 'Dr. Sameer Malhotra',
+    recipient_contact: '+91 98450 12345 / purchase@apexhealth.com',
+    channel: 'WhatsApp & Email',
+    trigger_event: 'Ready-to-Ship Notification',
+    message_content: 'Greetings from Josco Printers! Your order for 3,000 Annual Medical Conference Brochures (Job #JT-2026-001) is QC inspected and Ready to Ship. Balance payable at delivery: Rs 13,358.',
+    status: 'Delivered',
+    timestamp: '2026-08-28T09:15:00Z',
+  },
+  {
+    id: 'notif-2',
+    recipient_name: 'Anita Deshmukh',
+    recipient_contact: '+91 98230 67890',
+    channel: 'WhatsApp',
+    trigger_event: 'Proof Approval Request',
+    message_content: 'Dear Anita, Design Proof V2 for Pastry Box Packaging is ready for your review. Please review and approve to release plates: https://josco.live/proof/fb-902',
+    status: 'Read',
+    timestamp: '2026-08-27T11:45:00Z',
+  },
+  {
+    id: 'notif-3',
+    recipient_name: 'Pooja Hegde',
+    recipient_contact: '+91 99000 88776',
+    channel: 'WhatsApp',
+    trigger_event: '60% Advance Payment Reminder',
+    message_content: 'Dear Pooja, Quotation #QUO-2026-0145 for 500 Luxury Gold Foiled Visiting Cards has been approved. To release job into pre-press, kindly submit 60% advance of Rs 7,320 via UPI QR: https://josco.live/pay/qr-104',
+    status: 'Sent',
+    timestamp: '2026-08-28T10:05:00Z',
+  }
+];
+
+// Module 18: Master Data & Workflow Configuration
+export const INITIAL_MASTER_DATA = {
+  customer_types: ['Retail', 'Reseller', 'Corporate'],
+  enquiry_sources: ['WhatsApp', 'Call', 'Mail', 'Walk-in'],
+  production_processes: ['Offset', 'Digital 1', 'Digital 2', 'Screen', 'Associates'],
+  artwork_types: ['Party File', 'Party File with Editing', 'New Design', 'Repeat Job', 'Repeat Job with Editing'],
+  delivery_modes: ['Josco Door Delivery', 'Josco Delivery Partner', 'In Store Pick-up'],
+  payment_rules: {
+    default_advance_percent: 60,
+    full_payment_gate_percent: 100,
+    credit_bill_allowed_types: ['Corporate', 'Reseller'],
+  },
+  reason_codes: {
+    lost_order: ['Competitor Price Lower', 'Client Requirement Postponed', 'Turnaround Time Unmet', 'Specification Not Achievable'],
+    cancellation: ['Client Revoked Requirement', 'Budgetary Cut', 'Design Dispute'],
+    qc_failure: ['Color Density Deviation', 'Registration Off (>0.2mm)', 'Hickey / Ink Scumming', 'Lamination Bubble / Peeling', 'Wrong Dimension Trim'],
+    customer_rejection: ['Color Shade Discrepancy', 'Damaged Packaging', 'Quantity Shortage', 'Late Delivery'],
+    refund: ['Approved Quality Defect', 'Transit Damage Rupture', 'Order Cancellation Pre-Production'],
+  },
+  approval_matrix: {
+    margin_approval_threshold: '15%',
+    sales_order_release_roles: ['Admin', 'Sales Lead'],
+    credit_bill_approval_roles: ['Admin', 'Accounts Manager'],
+    refund_approval_roles: ['Admin'],
+    job_card_closure_roles: ['Admin', 'Production Planner', 'Accountant'],
+  }
+};
+
+// 8 End-to-End Workflow Control Gates
+export const WORKFLOW_CONTROL_GATES = [
+  {
+    gate_id: 1,
+    title: 'Customer Intake Gate',
+    rule: 'Enquiry must capture customer type and enquiry source before quotation work starts.',
+    status: 'Enforced',
+    module: 'CRM & Enquiry Management',
+  },
+  {
+    gate_id: 2,
+    title: 'Estimation & Pricing Gate',
+    rule: 'Estimate / Quote must complete pricing, revision, negotiation, and approval before sales order booking.',
+    status: 'Enforced',
+    module: 'Estimation & Quotation',
+  },
+  {
+    gate_id: 3,
+    title: 'Sales Booking & 60% Advance Gate',
+    rule: 'Sales Order Booking must validate customer PO / Annual Rate Contract, confirmation, and required 60% advance payment.',
+    status: 'Enforced',
+    module: 'Sales Order Booking & Confirmation',
+  },
+  {
+    gate_id: 4,
+    title: 'Prepress Approval & Release Gate',
+    rule: 'Prepress must complete draft, revision, clarification, and customer approval before job card creation and production release.',
+    status: 'Enforced',
+    module: 'Prepress & Artwork Approval',
+  },
+  {
+    gate_id: 5,
+    title: 'Process Path Allocation Gate',
+    rule: 'Production must follow the selected process path: Offset, Digital 1, Digital 2, Screen, or Associates.',
+    status: 'Enforced',
+    module: 'Production Planning & MES',
+  },
+  {
+    gate_id: 6,
+    title: 'Finishing & QC Gate',
+    rule: 'Finishing and QC must be completed before packing, delivery challan, invoice, and dispatch readiness.',
+    status: 'Enforced',
+    module: 'Finishing & QC Readiness',
+  },
+  {
+    gate_id: 7,
+    title: '100% Payment / Credit Release Gate',
+    rule: 'Delivery must be blocked until either 100% payment is received or an approved credit bill path is available.',
+    status: 'Enforced',
+    module: 'Finance & Delivery Management',
+  },
+  {
+    gate_id: 8,
+    title: 'Job Card Closure Gate',
+    rule: 'Job card closure must validate delivery completion, customer review/rejection status, outstanding clearance, and final accounts status.',
+    status: 'Enforced',
+    module: 'Job Card & Accounts Closure',
+  },
+];
+

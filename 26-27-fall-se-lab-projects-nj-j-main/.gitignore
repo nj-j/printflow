@@ -1,0 +1,24 @@
+# Excel & CSV data sheets
+*.csv
+*.xlsx
+*.xls
+Paper_Master sheet 27082026.csv
+
+# Logs & Temporary files
+*.log
+logs
+
+# Build & Dependencies
+node_modules/
+dist/
+dist-ssr/
+
+# IDE / Editor config
+.vscode/
+.idea/
+.DS_Store
+
+# Uploaded assets & archives
+*.zip
+*.png
+designtemplate/
