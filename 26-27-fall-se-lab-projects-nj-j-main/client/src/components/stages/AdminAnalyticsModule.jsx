@@ -52,20 +52,10 @@ export const AdminAnalyticsModule = () => {
       <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-2xs select-none">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-[1600px] mx-auto">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs">
-              09
+            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs font-mono">
+              10
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">Admin & Analytics</h1>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-bold">
-                  Executive Suite
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Executive OEE intelligence, automated customer communication triggers, and plant master configuration
-              </p>
-            </div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">Admin & Analytics</h1>
           </div>
 
           {/* Sub-Tab Navigation Bar */}

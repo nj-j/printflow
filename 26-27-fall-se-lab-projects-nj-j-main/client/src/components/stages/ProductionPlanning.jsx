@@ -252,20 +252,10 @@ export const ProductionPlanning = () => {
       <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-2xs select-none">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-[1600px] mx-auto">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs font-mono">
               03
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">Planning & Kanban</h1>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">
-                  Consolidated Suite
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Visual Kanban workflow scheduling, offset machine allocation, and 1-click rush fast-tracking
-              </p>
-            </div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">Planning & Kanban</h1>
           </div>
 
           {/* Sub-Tab Navigation Bar */}
@@ -303,7 +293,7 @@ export const ProductionPlanning = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
               <div className="flex justify-between items-center mb-1">
-                <span className="font-bold text-xs text-slate-900">Lithrone 26 (Kalkere Plant)</span>
+                <span className="font-bold text-xs text-slate-900">Lithrone 26 (Ramamurthy Nagar Plant)</span>
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               </div>
               <p className="text-[11px] text-slate-500">Allocated: 2 Multi-Color Offset Jobs</p>
@@ -314,7 +304,7 @@ export const ProductionPlanning = () => {
 
             <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
               <div className="flex justify-between items-center mb-1">
-                <span className="font-bold text-xs text-slate-900">Ryobi 660 (Byrathi Plant)</span>
+                <span className="font-bold text-xs text-slate-900">Ryobi 660 (Ramamurthy Nagar Plant)</span>
                 <span className="w-2 h-2 rounded-full bg-amber-500"></span>
               </div>
               <p className="text-[11px] text-slate-500">Allocated: 1 Active Commercial Job</p>

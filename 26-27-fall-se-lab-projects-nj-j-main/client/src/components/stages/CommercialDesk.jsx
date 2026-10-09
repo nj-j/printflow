@@ -17,7 +17,7 @@ export const CommercialDesk = () => {
     salesBookings
   } = useApp();
 
-  const isBooking = activeSubTab === 'booking' || activeSubTab === 'booking_queue' || activeSubTab === 'qr_desk' || activeSubTab === 'confirmations';
+  const isBooking = activeSubTab === 'booking' || activeSubTab === 'booking_queue';
   const currentSubTab = isBooking ? 'booking' : (activeSubTab === 'costing' ? 'quotes' : (activeSubTab || 'intake'));
 
   // Counts
@@ -25,7 +25,7 @@ export const CommercialDesk = () => {
   const pendingQuotes = enquiries.filter(
     e => !e.amount || Number(e.amount) === 0 || e.costing_status === 'Awaiting Costing'
   ).length;
-  const awaitingAdvanceCount = (salesBookings || []).filter(s => s.booking_status === 'Awaiting Advance').length;
+  const pendingBookingsCount = (salesBookings || []).filter(s => s.booking_status !== 'Booked').length;
 
   const subTabs = [
     {
@@ -44,10 +44,10 @@ export const CommercialDesk = () => {
     },
     {
       id: 'booking',
-      label: 'Order Booking',
+      label: 'Booking Queue',
       icon: FileCheck2,
-      badge: awaitingAdvanceCount > 0 ? `${awaitingAdvanceCount} Adv Pending` : `${(salesBookings || []).length} Orders`,
-      badgeColor: awaitingAdvanceCount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800'
+      badge: pendingBookingsCount > 0 ? `${pendingBookingsCount} Pending` : `${(salesBookings || []).length} Booked`,
+      badgeColor: pendingBookingsCount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
     }
   ];
 
@@ -57,20 +57,10 @@ export const CommercialDesk = () => {
       <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-2xs select-none">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-[1600px] mx-auto">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs font-mono">
               01
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">Commercial Desk</h1>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">
-                  Consolidated Suite
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Front-office CRM: Customer intake, quotations & costing, and sales order booking
-              </p>
-            </div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">Commercial Desk</h1>
           </div>
 
           {/* Sub-Tab Navigation Bar */}

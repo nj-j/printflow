@@ -105,20 +105,10 @@ export const AccountsBilling = () => {
       <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-2xs select-none">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-[1600px] mx-auto">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs">
-              08
+            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs font-mono">
+              09
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">Finance & Billing</h1>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                  Consolidated Suite
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                GST Tax Invoicing (HSN 49111010), payment receipt vouchers, and accounts receivable (AR) aging
-              </p>
-            </div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">Finance & Billing</h1>
           </div>
 
           {/* Sub-Tab Navigation Bar */}

@@ -20,13 +20,12 @@ export const INITIAL_USERS = [
 ];
 
 export const INITIAL_MACHINES = [
-  { id: 'mac-1', name: 'Ryobi 32', location: 'Kalkere', type: 'Offset', max_sheet_size: '13" x 19"', max_speed_iph: 10000, hourly_rate: 900, status: 'Running', current_job_id: 'job-101' },
-  { id: 'mac-2', name: 'Ryobi 660', location: 'Byrathi', type: 'Offset', max_sheet_size: '20" x 26"', max_speed_iph: 12000, hourly_rate: 1500, status: 'Running', current_job_id: 'job-102' },
-  { id: 'mac-3', name: 'Lithrone 26', location: 'Kalkere', type: 'Offset', max_sheet_size: '20" x 26"', max_speed_iph: 13000, hourly_rate: 1800, status: 'Idle', current_job_id: null },
-  { id: 'mac-4', name: 'KMC4080_Kalkere', location: 'Kalkere', type: 'Digital Color', max_sheet_size: '13" x 19.2"', max_speed_iph: 4860, hourly_rate: 1200, status: 'Running', current_job_id: 'job-103' },
-  { id: 'mac-5', name: 'KMC4080_Byrathi', location: 'Byrathi', type: 'Digital Color', max_sheet_size: '13" x 19.2"', max_speed_iph: 4860, hourly_rate: 1200, status: 'Idle', current_job_id: null },
+  { id: 'mac-1', name: 'Ryobi 32', location: 'Ramamurthy Nagar', type: 'Offset', max_sheet_size: '13" x 19"', max_speed_iph: 10000, hourly_rate: 900, status: 'Running', current_job_id: 'job-101' },
+  { id: 'mac-2', name: 'Ryobi 660', location: 'Ramamurthy Nagar', type: 'Offset', max_sheet_size: '20" x 26"', max_speed_iph: 12000, hourly_rate: 1500, status: 'Running', current_job_id: 'job-102' },
+  { id: 'mac-3', name: 'Lithrone 26', location: 'Ramamurthy Nagar', type: 'Offset', max_sheet_size: '20" x 26"', max_speed_iph: 13000, hourly_rate: 1800, status: 'Idle', current_job_id: null },
+  { id: 'mac-4', name: 'Konica Minolta C4080', location: 'Kalkere', type: 'Digital Color', max_sheet_size: '13" x 19.2"', max_speed_iph: 4860, hourly_rate: 1200, status: 'Running', current_job_id: 'job-103' },
   { id: 'mac-6', name: 'KM2100 Black', location: 'Byrathi', type: 'Digital Mono', max_sheet_size: '12" x 18"', max_speed_iph: 6000, hourly_rate: 750, status: 'Running', current_job_id: 'job-104' },
-  { id: 'mac-7', name: 'Kodak CTP Thermal Setter', location: 'Kalkere', type: 'Pre-Press', max_sheet_size: 'Plate 32" x 41"', max_speed_iph: 30, hourly_rate: 600, status: 'Running', current_job_id: null },
+  { id: 'mac-7', name: 'Kodak CTP Thermal Setter', location: 'Ramamurthy Nagar', type: 'Pre-Press', max_sheet_size: 'Plate 32" x 41"', max_speed_iph: 30, hourly_rate: 600, status: 'Running', current_job_id: null },
   { id: 'mac-8', name: 'Polar 115 Paper Cutter', location: 'Byrathi', type: 'Finishing', max_sheet_size: 'Cut width 45"', max_speed_iph: 4000, hourly_rate: 450, status: 'Running', current_job_id: null },
 ];
 
@@ -452,7 +451,7 @@ export const INITIAL_JOB_ORDERS = [
     priority: 'Urgent', // [RUSH CASE]
     is_rush_order: true,
     queue_position: 1,
-    assigned_press_machine: 'Lithrone 26 (Kalkere Plant)',
+    assigned_press_machine: 'Lithrone 26 (Ramamurthy Nagar Plant)',
     assigned_operator: 'Rajesh Nair',
     target_completion_date: '2026-08-28T18:00:00Z', // Today 6:00 PM!
     created_at: '2026-08-26T11:00:00Z',
@@ -538,7 +537,7 @@ export const INITIAL_WORKSTATION_LOGS = [
     operator_user_id: 'usr-4',
     operator_name: 'Rajesh Nair',
     workstation_stage: 'PressRun',
-    machine_name: 'Lithrone 26 (Kalkere Plant)',
+    machine_name: 'Lithrone 26 (Ramamurthy Nagar Plant)',
     started_at: '2026-08-28T09:00:00Z',
     completed_at: null, // In progress
     good_impressions: 2450,
@@ -566,7 +565,7 @@ export const INITIAL_WORKSTATION_LOGS = [
     operator_user_id: 'usr-4',
     operator_name: 'Rajesh Nair',
     workstation_stage: 'PressRun',
-    machine_name: 'Ryobi 660 (Byrathi Plant)',
+    machine_name: 'Ryobi 660 (Ramamurthy Nagar Plant)',
     started_at: '2026-08-26T10:00:00Z',
     completed_at: '2026-08-26T17:30:00Z',
     good_impressions: 16000,
@@ -611,10 +610,12 @@ export const INITIAL_ISSUES = [
     job_order_id: 'job-102',
     job_ticket_number: 'JT-2026-002',
     issue_type: 'ColorMismatch',
-    severity: 'Medium',
+    defect_category: 'Color Calibration & Delta-E',
+    source_terminal: 'Press Terminal (MES)',
+    severity: 'High',
     reported_by_name: 'Anil Kumar (QC)',
-    description: 'Special Pantone Warm Red 032 was slightly under-saturated during color pull. Formula adjusted.',
-    resolved: true,
+    description: 'Magenta ink density exceeded tolerance (Delta-E 3.4). Cylinder ink fountain re-calibration required.',
+    resolved: false,
     created_at: '2026-08-27T15:00:00Z',
   },
   {
@@ -1009,6 +1010,7 @@ export const INITIAL_SALES_BOOKINGS = [
     booking_status: 'Booked', // Draft, Awaiting PO/ARC, Awaiting Advance, Booked, Cancelled
     production_release: true,
     refund_applicable: false,
+    prepress: 'Kiran Verma',
     created_at: '2026-08-26T14:00:00Z',
   },
   {
@@ -1028,6 +1030,7 @@ export const INITIAL_SALES_BOOKINGS = [
     booking_status: 'Booked',
     production_release: true,
     refund_applicable: false,
+    prepress: 'Aruna',
     created_at: '2026-08-27T11:30:00Z',
   },
   {
@@ -1047,6 +1050,7 @@ export const INITIAL_SALES_BOOKINGS = [
     booking_status: 'Booked',
     production_release: true,
     refund_applicable: false,
+    prepress: 'Girish',
     created_at: '2026-08-27T16:00:00Z',
   },
   {
@@ -1066,6 +1070,7 @@ export const INITIAL_SALES_BOOKINGS = [
     booking_status: 'Awaiting Advance',
     production_release: false,
     refund_applicable: false,
+    prepress: 'Karthik',
     created_at: '2026-08-28T10:00:00Z',
   }
 ];

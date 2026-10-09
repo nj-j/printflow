@@ -184,7 +184,7 @@ export const SystemAdmin = () => {
                   <tr key={mac.id}>
                     <td className="font-semibold text-sm">{mac.name}</td>
                     <td>
-                      <span className={`badge ${mac.location === 'Kalkere' ? 'badge-primary' : 'badge-info'}`}>
+                      <span className={`badge ${(mac.location === 'Ramamurthy Nagar' || mac.location === 'Kalkere') ? 'badge-primary' : 'badge-info'}`}>
                         {mac.location ? `${mac.location} Branch` : 'Main Plant'}
                       </span>
                     </td>

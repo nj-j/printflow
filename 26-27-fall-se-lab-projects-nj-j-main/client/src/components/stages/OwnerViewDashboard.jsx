@@ -69,8 +69,9 @@ export const OwnerViewDashboard = () => {
             className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-blue-500 cursor-pointer"
           >
             <option>Main Branch</option>
-            <option>Plant #01 - Kalkere</option>
+            <option>Plant #01 - Ramamurthy Nagar</option>
             <option>Plant #02 - Byrathi</option>
+                  <option>Plant #03 - Kalkere</option>
           </select>
 
           <button

@@ -68,12 +68,15 @@ export const AppProvider = ({ children }) => {
         return 'job_tickets';
       case 'press_terminal':
         return 'live_terminal';
-      case 'finishing_qc':
       case 'finishing':
         return 'bindery';
       case 'associates':
         return 'outsourced';
+      case 'finishing_qc':
+        return 'bindery';
+      case 'qc':
       case 'qc_packing':
+      case 'qc_inspection':
         return 'qc_inspection';
       case 'inventory':
         return 'raw_stock';
@@ -107,9 +110,10 @@ export const AppProvider = ({ children }) => {
     else if (tabId === 'estimator') { targetTab = 'commercial'; targetSubTab = 'quotes'; }
     else if (tabId === 'booking') { targetTab = 'commercial'; targetSubTab = 'booking'; }
     else if (tabId === 'production') { targetTab = 'planning'; targetSubTab = 'job_tickets'; }
-    else if (tabId === 'finishing') { targetTab = 'finishing_qc'; targetSubTab = 'bindery'; }
-    else if (tabId === 'associates') { targetTab = 'finishing_qc'; targetSubTab = 'outsourced'; }
-    else if (tabId === 'qc_packing') { targetTab = 'finishing_qc'; targetSubTab = 'qc_inspection'; }
+    else if (tabId === 'finishing') { targetTab = 'finishing'; targetSubTab = 'bindery'; }
+    else if (tabId === 'associates') { targetTab = 'finishing'; targetSubTab = 'outsourced'; }
+    else if (tabId === 'finishing_qc') { targetTab = 'finishing'; targetSubTab = 'bindery'; }
+    else if (tabId === 'qc' || tabId === 'qc_packing' || tabId === 'qc_inspection') { targetTab = 'qc'; targetSubTab = 'qc_inspection'; }
     else if (tabId === 'procurement') { targetTab = 'inventory'; targetSubTab = 'purchase_orders'; }
     else if (tabId === 'rejections') { targetTab = 'dispatch'; targetSubTab = 'returns'; }
     else if (tabId === 'owner_dashboard' || tabId === 'dashboard') { targetTab = 'admin_analytics'; targetSubTab = 'executive_oee'; }
@@ -134,9 +138,10 @@ export const AppProvider = ({ children }) => {
     else if (tabId === 'estimator') { targetTab = 'commercial'; if (!targetSubTab) targetSubTab = 'quotes'; }
     else if (tabId === 'booking') { targetTab = 'commercial'; if (!targetSubTab) targetSubTab = 'booking'; }
     else if (tabId === 'production') { targetTab = 'planning'; if (!targetSubTab) targetSubTab = 'job_tickets'; }
-    else if (tabId === 'finishing') { targetTab = 'finishing_qc'; if (!targetSubTab) targetSubTab = 'bindery'; }
-    else if (tabId === 'associates') { targetTab = 'finishing_qc'; if (!targetSubTab) targetSubTab = 'outsourced'; }
-    else if (tabId === 'qc_packing') { targetTab = 'finishing_qc'; if (!targetSubTab) targetSubTab = 'qc_inspection'; }
+    else if (tabId === 'finishing') { targetTab = 'finishing'; if (!targetSubTab) targetSubTab = 'bindery'; }
+    else if (tabId === 'associates') { targetTab = 'finishing'; if (!targetSubTab) targetSubTab = 'outsourced'; }
+    else if (tabId === 'finishing_qc') { targetTab = 'finishing'; if (!targetSubTab) targetSubTab = 'bindery'; }
+    else if (tabId === 'qc' || tabId === 'qc_packing' || tabId === 'qc_inspection') { targetTab = 'qc'; if (!targetSubTab) targetSubTab = 'qc_inspection'; }
     else if (tabId === 'procurement') { targetTab = 'inventory'; if (!targetSubTab) targetSubTab = 'purchase_orders'; }
     else if (tabId === 'rejections') { targetTab = 'dispatch'; if (!targetSubTab) targetSubTab = 'returns'; }
     else if (tabId === 'owner_dashboard' || tabId === 'dashboard') { targetTab = 'admin_analytics'; if (!targetSubTab) targetSubTab = 'executive_oee'; }
@@ -333,7 +338,23 @@ export const AppProvider = ({ children }) => {
   const [selectedTripSheetForModal, setSelectedTripSheetForModal] = useState(null);
   const [selectedDate, setSelectedDate] = useState('03-06-2025');
   const [selectedSourceFilter, setSelectedSourceFilter] = useState('All Sources');
-  const [activeBranch, setActiveBranch] = useState('Plant #01 • Kalkere');
+  const [activeBranch, setActiveBranch] = useState('Plant #01 • Ramamurthy Nagar');
+
+  // Global QC Flag Modal State
+  const [isQCFlagModalOpen, setIsQCFlagModalOpen] = useState(false);
+  const [qcFlagModalJob, setQcFlagModalJob] = useState(null);
+  const [qcFlagSourceTerminal, setQcFlagSourceTerminal] = useState('Press Terminal');
+
+  const openQCFlagModal = (job, terminalName = 'Press Terminal') => {
+    setQcFlagModalJob(job);
+    setQcFlagSourceTerminal(terminalName);
+    setIsQCFlagModalOpen(true);
+  };
+
+  const closeQCFlagModal = () => {
+    setIsQCFlagModalOpen(false);
+    setQcFlagModalJob(null);
+  };
 
   // Persist to local storage
   useEffect(() => {
@@ -377,13 +398,96 @@ export const AppProvider = ({ children }) => {
     excessStock, customerRejections, notificationsLog, masterData
   ]);
 
+  // Synchronize all quoted enquiries into salesBookings so they automatically reflect in Order Booking tab
+  useEffect(() => {
+    const quotedEnquiries = enquiries.filter(e => 
+      Number(e.amount) > 0 && (e.costing_status === 'Costed' || e.quotation_generated)
+    );
+
+    if (quotedEnquiries.length === 0) return;
+
+    setSalesBookings(prevBookings => {
+      const existingEnquiryIds = new Set(prevBookings.map(b => b.enquiry_id).filter(Boolean));
+      const existingBookingNums = new Set(prevBookings.map(b => b.booking_number).filter(Boolean));
+      const existingCustomerTotalPairs = new Set(
+        prevBookings.map(b => `${(b.customer_name || '').toLowerCase()}_${b.order_total}`)
+      );
+
+      const toAdd = [];
+
+      quotedEnquiries.forEach(enq => {
+        const amount = Number(enq.amount);
+        const bookingNum = enq.dn_no && enq.dn_no !== '-' 
+          ? `SO-2026-${enq.dn_no}` 
+          : (enq.enquiry_no ? `SO-2026-${enq.enquiry_no.replace(/\D/g, '').slice(-4)}` : `SO-2026-${enq.id.replace(/\D/g, '') || String(enq.id).slice(-4)}`);
+
+        const pairKey = `${(enq.customer_name || '').toLowerCase()}_${amount}`;
+
+        if (
+          !existingEnquiryIds.has(enq.id) &&
+          !existingBookingNums.has(bookingNum) &&
+          !existingCustomerTotalPairs.has(pairKey)
+        ) {
+          const advReq = Math.round(amount * 0.6);
+          const advReceived = Number(enq.advance) || (enq.status === 'Completed' || enq.advance_remarks?.toLowerCase().includes('full') ? amount : 0);
+          const isBooked = advReceived >= advReq && advReq > 0;
+
+          toAdd.push({
+            id: `sb-enq-${enq.id}`,
+            booking_number: bookingNum,
+            quote_id: `q-${enq.id}`,
+            enquiry_id: enq.id,
+            customer_id: enq.customer_id || `cust-${enq.id}`,
+            customer_name: enq.customer_name,
+            customer_po_ref: enq.dn_no && enq.dn_no !== '-' ? `DN-${enq.dn_no}` : (enq.enquiry_no || enq.id),
+            arc_number: null,
+            job_title: enq.job_name || enq.job_specification || 'Commercial Print Job',
+            confirmation_channel: enq.source || 'Walk-in',
+            confirmation_date: enq.date || new Date().toISOString().split('T')[0],
+            order_total: amount,
+            advance_required: advReq,
+            advance_received: advReceived,
+            balance_pending: Math.max(0, amount - advReceived),
+            booking_status: isBooked ? 'Booked' : 'Awaiting Advance',
+            production_release: isBooked,
+            refund_applicable: false,
+            prepress: enq.prepress && enq.prepress !== '-' ? enq.prepress : 'Aruna',
+            created_at: new Date().toISOString()
+          });
+        }
+      });
+
+      const updatedPrev = prevBookings.map(b => {
+        const matchingEnq = quotedEnquiries.find(e => e.id === b.enquiry_id || (e.dn_no && `SO-2026-${e.dn_no}` === b.booking_number));
+        if (matchingEnq && matchingEnq.prepress && matchingEnq.prepress !== '-' && (!b.prepress || b.prepress === '-')) {
+          return { ...b, prepress: matchingEnq.prepress };
+        }
+        return b;
+      });
+
+      if (toAdd.length === 0) return updatedPrev;
+      return [...toAdd, ...updatedPrev];
+    });
+  }, [enquiries]);
+
   const addSalesBooking = (bookingData) => {
     const newBooking = {
       ...bookingData,
-      id: `sb-${Date.now()}`,
-      created_at: new Date().toISOString()
+      id: bookingData.id || `sb-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      created_at: bookingData.created_at || new Date().toISOString()
     };
-    setSalesBookings(prev => [newBooking, ...prev]);
+    setSalesBookings(prev => {
+      const existsIndex = prev.findIndex(b => 
+        (bookingData.enquiry_id && b.enquiry_id === bookingData.enquiry_id) ||
+        (bookingData.booking_number && b.booking_number === bookingData.booking_number)
+      );
+      if (existsIndex >= 0) {
+        const next = [...prev];
+        next[existsIndex] = { ...next[existsIndex], ...newBooking };
+        return next;
+      }
+      return [newBooking, ...prev];
+    });
     return newBooking;
   };
 
@@ -529,13 +633,35 @@ export const AppProvider = ({ children }) => {
       created_at: new Date().toISOString()
     };
     setTripSheets(prev => [newTrip, ...prev]);
-    // Mark assigned route jobs as in-transit
+    // Mark assigned route jobs as in-transit and assigned to trip
     if (tripData.selected_job_ids?.length) {
       setRouteJobs(prev => prev.map(j => {
         if (tripData.selected_job_ids.includes(j.job_no)) {
-          return { ...j, status: 'In-Transit', ack_status: 'Dispatched' };
+          return {
+            ...j,
+            status: 'In-Transit',
+            ack_status: 'Dispatched',
+            dispatched: j.route_qty,
+            balance: 0,
+            assigned_to_trip: true,
+            trip_id: newTrip.id,
+            trip_number: newTrip.trip_number
+          };
         }
         return j;
+      }));
+
+      // Also advance stage in jobOrders if matching tickets exist
+      setJobOrders(prev => prev.map(job => {
+        if (tripData.selected_job_ids.includes(job.job_ticket_number)) {
+          return {
+            ...job,
+            current_stage: 'InTransit',
+            delivery_status: 'In-Transit',
+            trip_sheet_number: newTrip.trip_number
+          };
+        }
+        return job;
       }));
     }
     return newTrip;
@@ -564,6 +690,30 @@ export const AppProvider = ({ children }) => {
 
   const updateEnquiry = (enquiryId, updates) => {
     setEnquiries(prev => prev.map(e => e.id === enquiryId ? { ...e, ...updates } : e));
+
+    if (updates.prepress && updates.prepress !== '-') {
+      const targetEnq = enquiries.find(e => e.id === enquiryId);
+      const enqNumber = targetEnq?.enquiry_no || enquiryId;
+      const dnNumber = targetEnq?.dn_no;
+      const custName = targetEnq?.customer_name;
+
+      // Synchronize prepress designer with salesBookings
+      setSalesBookings(prev => prev.map(b => {
+        const isMatch = b.enquiry_id === enquiryId ||
+          b.customer_po_ref === enqNumber ||
+          (dnNumber && dnNumber !== '-' && (b.booking_number?.includes(dnNumber) || b.customer_po_ref?.includes(dnNumber))) ||
+          (custName && b.customer_name === custName);
+        return isMatch ? { ...b, prepress: updates.prepress } : b;
+      }));
+
+      // Synchronize prepress designer with prepressJobs
+      setPrepressJobs(prev => prev.map(p => {
+        const isMatch = (custName && p.customer_name === custName) ||
+          (dnNumber && dnNumber !== '-' && p.job_ticket_number?.includes(dnNumber)) ||
+          p.job_ticket_number?.includes(enquiryId.replace(/\D/g, ''));
+        return isMatch ? { ...p, assigned_designer: updates.prepress } : p;
+      }));
+    }
   };
 
   // Role simulation switcher
@@ -1030,7 +1180,7 @@ export const AppProvider = ({ children }) => {
     const newIssue = {
       ...issueData,
       id: `iss-${Date.now()}`,
-      reported_by_name: activeUser.full_name,
+      reported_by_name: issueData.reported_by_name || activeUser.full_name,
       resolved: false,
       created_at: new Date().toISOString(),
     };
@@ -1039,12 +1189,290 @@ export const AppProvider = ({ children }) => {
     addAlert({
       alert_type: 'TaskAlert',
       severity: 'Warning',
-      message: `[QUALITY ISSUE LOGGED] [${newIssue.issue_type}] on Job ${newIssue.job_ticket_number}.`,
+      message: `[QUALITY ISSUE LOGGED] [${newIssue.issue_type || newIssue.defect_category}] on Job ${newIssue.job_ticket_number}.`,
     });
+    return newIssue;
   };
 
   const resolveIssue = (issueId) => {
-    setIssues(prev => prev.map(i => i.id === issueId ? { ...i, resolved: true } : i));
+    setIssues(prev => prev.map(i => i.id === issueId ? { ...i, resolved: true, resolved_at: new Date().toISOString() } : i));
+  };
+
+  // Dedicated QC Flag Handler (Callable from Prepress, Press, Finishing, Delivery)
+  const raiseQCFlag = ({
+    jobId,
+    jobTicketNumber,
+    customerName,
+    jobTitle,
+    terminal,
+    defectCategory,
+    severity = 'Major',
+    description,
+    reportedBy
+  }) => {
+    const reporter = reportedBy || activeUser.full_name;
+    const ticketNo = jobTicketNumber || 'General';
+    const cleanDesc = (description || '').trim();
+
+    // Match or find job order
+    const matchedJob = jobOrders.find(j => j.id === jobId || j.job_ticket_number === ticketNo);
+
+    const newFlag = {
+      id: `qc-flag-${Date.now()}`,
+      job_order_id: matchedJob?.id || jobId || `job-${Date.now()}`,
+      job_ticket_number: ticketNo,
+      customer_name: customerName || matchedJob?.customer_name || 'Customer',
+      job_title: jobTitle || matchedJob?.job_title || 'Commercial Job',
+      source_terminal: terminal || 'Production Terminal',
+      defect_category: defectCategory || 'General Defect',
+      issue_type: defectCategory || 'General Defect',
+      severity: severity,
+      description: cleanDesc,
+      reported_by_name: reporter,
+      created_at: new Date().toISOString(),
+      resolved: false,
+      resolution_type: null, // 'Fixed' | 'SentBack'
+      resolution_notes: '',
+      resolved_at: null,
+      resolved_by: null,
+      current_stage: matchedJob?.current_stage || terminal
+    };
+
+    setIssues(prev => [newFlag, ...prev]);
+
+    // Update Job Order with QC Flag and Comment
+    if (matchedJob) {
+      setJobOrders(prev => prev.map(j => {
+        if (j.id !== matchedJob.id && j.job_ticket_number !== ticketNo) return j;
+        const qcComment = {
+          id: `com-${Date.now()}`,
+          text: `[QC FLAG RAISED at ${terminal}]: ${defectCategory} (${severity} Severity) - ${cleanDesc}`,
+          author: reporter,
+          stage: j.current_stage,
+          timestamp: new Date().toISOString()
+        };
+        return {
+          ...j,
+          qc_flagged: true,
+          active_qc_flag_id: newFlag.id,
+          qc_flag_count: (j.qc_flag_count || 0) + 1,
+          comments: [...(j.comments || []), qcComment],
+          last_note: `QC Flag: ${defectCategory} (${cleanDesc})`,
+          notes: `QC Flag: ${defectCategory} (${cleanDesc})`
+        };
+      }));
+
+      // Sync to prepressJobs if applicable
+      setPrepressJobs(prev => prev.map(p => {
+        if (p.job_ticket_number === ticketNo) {
+          return {
+            ...p,
+            qc_flagged: true,
+            notes: `[QC FLAGGED]: ${cleanDesc || defectCategory}`
+          };
+        }
+        return p;
+      }));
+
+      // Sync to finishingOps if applicable
+      setFinishingOps(prev => prev.map(f => {
+        if (f.job_ticket_number === ticketNo) {
+          return {
+            ...f,
+            qc_flagged: true
+          };
+        }
+        return f;
+      }));
+    }
+
+    addAlert({
+      alert_type: 'TaskAlert',
+      severity: severity === 'Critical' ? 'Critical' : 'Warning',
+      message: `[QC DEFECT FLAGGED] ${ticketNo} flagged at [${terminal}]: ${defectCategory} (${severity}). Inspect in Quality Control Module.`,
+    });
+
+    addNotificationLog({
+      title: `QC Defect Flagged on ${ticketNo}`,
+      message: `Raised at ${terminal}: ${defectCategory} - ${cleanDesc}`,
+      channel: 'App',
+      type: 'Defect',
+      status: 'Sent'
+    });
+
+    return newFlag;
+  };
+
+  // Mark QC Flag as Fixed (Allows continuing at current station)
+  const markQCFlagFixed = (issueId, fixNotes = '') => {
+    const cleanNotes = (fixNotes || 'Defect rectified and inspected. Tolerances passed.').trim();
+    let affectedTicket = null;
+
+    setIssues(prev => prev.map(iss => {
+      if (iss.id === issueId) {
+        affectedTicket = iss.job_ticket_number;
+        return {
+          ...iss,
+          resolved: true,
+          resolution_type: 'Fixed',
+          resolution_notes: cleanNotes,
+          resolved_at: new Date().toISOString(),
+          resolved_by: activeUser.full_name
+        };
+      }
+      return iss;
+    }));
+
+    if (affectedTicket) {
+      // Check if any other unresolved issues exist for this ticket
+      const remainingOpen = issues.filter(i => i.job_ticket_number === affectedTicket && i.id !== issueId && !i.resolved);
+
+      setJobOrders(prev => prev.map(j => {
+        if (j.job_ticket_number !== affectedTicket) return j;
+        const fixComment = {
+          id: `com-${Date.now()}`,
+          text: `[QC RESOLUTION - FIXED]: ${cleanNotes}`,
+          author: activeUser.full_name,
+          stage: j.current_stage,
+          timestamp: new Date().toISOString()
+        };
+        return {
+          ...j,
+          qc_flagged: remainingOpen.length > 0,
+          comments: [...(j.comments || []), fixComment],
+          last_note: `QC Fixed: ${cleanNotes}`,
+          notes: `QC Fixed: ${cleanNotes}`
+        };
+      }));
+
+      if (remainingOpen.length === 0) {
+        setPrepressJobs(prev => prev.map(p => p.job_ticket_number === affectedTicket ? { ...p, qc_flagged: false } : p));
+        setFinishingOps(prev => prev.map(f => f.job_ticket_number === affectedTicket ? { ...f, qc_flagged: false } : f));
+      }
+
+      addAlert({
+        alert_type: 'TaskAlert',
+        severity: 'Info',
+        message: `[QC FIXED] Job ${affectedTicket} marked Fixed by ${activeUser.full_name}. Production cleared to proceed.`,
+      });
+    }
+  };
+
+  // Send Back Job Card Up Production Pipeline / Back a Station
+  const sendBackJobFromQC = (issueId, targetStage, returnReason = '') => {
+    const cleanReason = (returnReason || 'Job sent back from QC for rework / plate remake / color correction.').trim();
+    let targetTicket = null;
+    let targetJob = null;
+
+    setIssues(prev => prev.map(iss => {
+      if (iss.id === issueId) {
+        targetTicket = iss.job_ticket_number;
+        return {
+          ...iss,
+          resolved: true,
+          resolution_type: 'SentBack',
+          return_stage: targetStage,
+          resolution_notes: cleanReason,
+          resolved_at: new Date().toISOString(),
+          resolved_by: activeUser.full_name
+        };
+      }
+      return iss;
+    }));
+
+    // Rewind job in jobOrders pipeline
+    setJobOrders(prev => prev.map(j => {
+      if (j.job_ticket_number === targetTicket || j.id === targetTicket) {
+        targetJob = j;
+        const returnComment = {
+          id: `com-${Date.now()}`,
+          text: `[RETURNED FROM QC to ${targetStage}]: ${cleanReason}`,
+          author: activeUser.full_name,
+          stage: targetStage,
+          timestamp: new Date().toISOString()
+        };
+        return {
+          ...j,
+          current_stage: targetStage,
+          qc_flagged: false,
+          returned_from_qc: true,
+          last_qc_action: 'SentBack',
+          last_qc_return_reason: cleanReason,
+          comments: [...(j.comments || []), returnComment],
+          last_note: `[RETURNED FROM QC]: ${cleanReason}`,
+          notes: `[RETURNED FROM QC]: ${cleanReason}`
+        };
+      }
+      return j;
+    }));
+
+    // Log Workstation Return event
+    if (targetTicket) {
+      const jobObj = targetJob || jobOrders.find(j => j.job_ticket_number === targetTicket);
+      if (jobObj) {
+        setWorkstationLogs(prev => [{
+          id: `log-${Date.now()}`,
+          job_order_id: jobObj.id,
+          job_ticket_number: jobObj.job_ticket_number,
+          operator_user_id: activeUser.id,
+          operator_name: activeUser.full_name,
+          workstation_stage: targetStage,
+          machine_name: jobObj.assigned_press_machine,
+          started_at: new Date().toISOString(),
+          completed_at: null,
+          good_impressions: jobObj.print_quantity,
+          waste_sheets_logged: 0,
+          hours_worked: 0,
+          operator_notes: `[PIPELINE REWOUND BY QC]: Returned to ${targetStage}. Instructions: ${cleanReason}`,
+        }, ...prev]);
+      }
+
+      // If returning to Pre-press, update prepressJobs
+      if (targetStage === 'DesignProofing') {
+        setPrepressJobs(prev => prev.map(p => {
+          if (p.job_ticket_number === targetTicket) {
+            return {
+              ...p,
+              customer_approval_status: 'RevisionRequested',
+              production_release_authorized: false,
+              returned_from_qc: true,
+              last_note: `[RETURNED FROM QC]: ${cleanReason}`,
+              notes: `[RETURNED FROM QC]: ${cleanReason}`
+            };
+          }
+          return p;
+        }));
+      }
+
+      // If returning to Finishing, reset finishingOps status to In-Progress
+      if (targetStage === 'FinishingQC') {
+        setFinishingOps(prev => prev.map(f => {
+          if (f.job_ticket_number === targetTicket) {
+            return {
+              ...f,
+              status: 'In-Progress',
+              returned_from_qc: true,
+              moved_to_qc: false
+            };
+          }
+          return f;
+        }));
+      }
+
+      addAlert({
+        alert_type: 'RushOrderAlert',
+        severity: 'Critical',
+        message: `[JOB RETURNED FROM QC] Job ${targetTicket} sent back to [${targetStage}] for rework. Reason: ${cleanReason}`,
+      });
+
+      addNotificationLog({
+        title: `Job ${targetTicket} Rewound by QC`,
+        message: `Returned to ${targetStage} stage. Reason: ${cleanReason}`,
+        channel: 'App',
+        type: 'Rework',
+        status: 'Sent'
+      });
+    }
   };
 
   // 9. Dispatch & Delivery
@@ -1205,6 +1633,141 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const recordBookingAdvance = (bookingId, amount, paymentMethod = 'UPI', transactionRef = '', paymentNotes = '') => {
+    const targetBooking = salesBookings.find(b => b.id === bookingId);
+    if (!targetBooking) return;
+
+    const adv = (amount !== undefined && amount !== null && !isNaN(Number(amount)) && Number(amount) > 0)
+      ? Number(amount)
+      : (targetBooking.advance_required || 0);
+
+    const bookedOrder = {
+      ...targetBooking,
+      advance_received: adv,
+      balance_pending: Math.max(0, targetBooking.order_total - adv),
+      booking_status: 'Booked',
+      production_release: true,
+      payment_mode: paymentMethod,
+      transaction_ref: transactionRef,
+      payment_notes: paymentNotes
+    };
+
+    setSalesBookings(prev => prev.map(b => b.id === bookingId ? bookedOrder : b));
+
+    // 1. Move job to Pre-Press window (prepressJobs)
+    const matchedEnq = enquiries.find(e =>
+      e.id === bookedOrder.enquiry_id ||
+      e.enquiry_no === bookedOrder.enquiry_id ||
+      (bookedOrder.customer_po_ref && e.dn_no && `DN-${e.dn_no}` === bookedOrder.customer_po_ref) ||
+      (bookedOrder.customer_po_ref && (e.enquiry_no === bookedOrder.customer_po_ref || e.id === bookedOrder.customer_po_ref)) ||
+      (bookedOrder.customer_name && e.customer_name === bookedOrder.customer_name)
+    );
+    const resolvedDesigner = (bookedOrder.prepress && bookedOrder.prepress !== '-' && bookedOrder.prepress !== 'Unassigned')
+      ? bookedOrder.prepress
+      : (matchedEnq?.prepress && matchedEnq.prepress !== '-' ? matchedEnq.prepress : 'Aruna');
+
+    const existingPrep = prepressJobs.find(p => p.job_ticket_number === bookedOrder.booking_number);
+    if (!existingPrep) {
+      addPrepressJob({
+        job_ticket_number: bookedOrder.booking_number,
+        customer_name: bookedOrder.customer_name,
+        job_title: bookedOrder.job_title || `${bookedOrder.customer_name} Commercial Order`,
+        artwork_type: 'Party File with Editing',
+        assigned_designer: resolvedDesigner,
+        revision_count: 1,
+        current_version: 'V1',
+        proof_shared_channel: bookedOrder.confirmation_channel || 'WhatsApp',
+        proof_shared_date: new Date().toISOString().split('T')[0],
+        customer_approval_status: 'PendingReview',
+        production_release_authorized: false,
+        ctp_plates_generated: 4,
+        notes: `Released from Commercial Desk with Advance Payment (${paymentMethod}: ${transactionRef || 'Recorded'})`
+      });
+    } else {
+      updatePrepressJob(existingPrep.id, {
+        assigned_designer: resolvedDesigner
+      });
+    }
+
+    // 2. Add or update job in jobOrders with current_stage: 'Pre-Press'
+    const existingJob = jobOrders.find(j => j.job_ticket_number === bookedOrder.booking_number);
+    if (!existingJob) {
+      const newJob = {
+        id: `job-${Date.now()}`,
+        job_ticket_number: bookedOrder.booking_number,
+        quote_id: bookedOrder.quote_id || `q-${Date.now()}`,
+        customer_id: bookedOrder.customer_id || 'cust-generic',
+        customer_name: bookedOrder.customer_name,
+        job_title: bookedOrder.job_title || `${bookedOrder.customer_name} Commercial Order`,
+        production_type: 'Offset',
+        print_quantity: 5000,
+        paper_details: '300 GSM Art Card (20" x 30")',
+        color_spec: '4/4 Front & Back (Process CMYK)',
+        finishing_spec: 'Thermal Matte Lamination, Die-Punch & Pasting',
+        current_stage: 'Pre-Press',
+        priority: 'Urgent',
+        is_rush_order: true,
+        queue_position: 1,
+        total_cost: bookedOrder.order_total,
+        balance_due: bookedOrder.balance_pending,
+        advance_paid: adv,
+        assigned_press_machine: 'Ryobi 660 (Ramamurthy Nagar Plant)',
+        created_at: new Date().toISOString(),
+        target_completion_date: new Date(Date.now() + 86400000 * 2).toISOString()
+      };
+      setJobOrders(prev => [newJob, ...prev]);
+    } else {
+      setJobOrders(prev => prev.map(j => j.job_ticket_number === bookedOrder.booking_number ? {
+        ...j,
+        current_stage: 'Pre-Press',
+        advance_paid: adv,
+        balance_due: bookedOrder.balance_pending
+      } : j));
+    }
+
+    // 3. Record a payment receipt for the advance if paid
+    if (adv > 0) {
+      const receipt = {
+        id: `rec-${Date.now()}`,
+        invoice_id: bookedOrder.booking_number,
+        receipt_number: `REC-ADV-${Date.now().toString().slice(-6)}`,
+        customer_name: bookedOrder.customer_name,
+        amount_paid: adv,
+        payment_method: paymentMethod || 'UPI',
+        transaction_ref: transactionRef || `${paymentMethod}-${Date.now().toString().slice(-6)}`,
+        payment_date: new Date().toISOString(),
+        receipt_type: 'Booking Advance',
+        notes: paymentNotes || ''
+      };
+      setPaymentReceipts(prev => [receipt, ...prev]);
+    }
+
+    addAlert({
+      alert_type: 'CommercialAlert',
+      severity: 'Success',
+      message: `[ORDER BOOKED] ${bookedOrder.booking_number} (${bookedOrder.customer_name}) booked & released. Job moved to Pre-Press!`,
+    });
+
+    // 4. Update status & stage in Commercial Desk enquiries view
+    setEnquiries(prev => prev.map(e => {
+      const isMatch = (bookedOrder.enquiry_id && e.id === bookedOrder.enquiry_id) ||
+        (bookedOrder.booking_number && e.dn_no && `SO-2026-${e.dn_no}` === bookedOrder.booking_number) ||
+        (bookedOrder.booking_number && (e.id === bookedOrder.booking_number || `SO-2026-${e.id.replace(/\D/g, '')}` === bookedOrder.booking_number)) ||
+        (bookedOrder.customer_name && e.customer_name?.toLowerCase().trim() === bookedOrder.customer_name?.toLowerCase().trim());
+      if (isMatch) {
+        return {
+          ...e,
+          advance: (Number(e.advance) || 0) + adv,
+          payment_mode: paymentMethod,
+          transaction_ref: transactionRef,
+          current_stage: 'Pre-Press',
+          status: 'Booked'
+        };
+      }
+      return e;
+    }));
+  };
+
   // 11. Customer Feedback & Closure
   const recordFeedback = (jobTicketNumber, customerName, stars, notes) => {
     const newFb = {
@@ -1331,6 +1894,7 @@ export const AppProvider = ({ children }) => {
         designProofs,
         updateDesignProof,
         jobOrders,
+        setJobOrders,
         updateJobOrder,
         addJobComment,
         bumpJobToTop,
@@ -1386,6 +1950,7 @@ export const AppProvider = ({ children }) => {
         salesBookings,
         addSalesBooking,
         updateSalesBooking,
+        recordBookingAdvance,
         prepressJobs,
         addPrepressJob,
         updatePrepressJob,
@@ -1421,6 +1986,18 @@ export const AppProvider = ({ children }) => {
         navigateToTab,
         estimatorViewMode,
         setEstimatorViewMode,
+        // QC Flag Module Integration
+        isQCFlagModalOpen,
+        setIsQCFlagModalOpen,
+        qcFlagModalJob,
+        setQcFlagModalJob,
+        qcFlagSourceTerminal,
+        setQcFlagSourceTerminal,
+        openQCFlagModal,
+        closeQCFlagModal,
+        raiseQCFlag,
+        markQCFlagFixed,
+        sendBackJobFromQC,
       }}
     >
       {children}

@@ -3,12 +3,13 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 
-// Consolidated 9 Modules
+// Consolidated 10 Modules
 import { CommercialDesk } from './components/stages/CommercialDesk';
 import { PrepressArtwork } from './components/stages/PrepressArtwork';
 import { ProductionPlanning } from './components/stages/ProductionPlanning';
 import { PrintingTerminal } from './components/stages/PrintingTerminal';
-import { FinishingQCModule } from './components/stages/FinishingQCModule';
+import { FinishingModule } from './components/stages/FinishingModule';
+import { QualityControlModule } from './components/stages/QualityControlModule';
 import { InventoryManagement } from './components/stages/InventoryManagement';
 import { DispatchLogisticsModule } from './components/stages/DispatchLogisticsModule';
 import { AccountsBilling } from './components/stages/AccountsBilling';
@@ -32,6 +33,7 @@ import { InvoiceModal } from './components/common/InvoiceModal';
 import { QuoteModal } from './components/common/QuoteModal';
 import { ControlGatesModal } from './components/common/ControlGatesModal';
 import { EnquiryFormModal } from './components/common/EnquiryFormModal';
+import { QCFlagModal } from './components/common/QCFlagModal';
 
 import './App.css';
 
@@ -40,12 +42,15 @@ const MainContent = () => {
 
   const renderActiveView = () => {
     switch (activeTab) {
-      // The 9 Consolidated ERP Modules
+      // The 10 Consolidated ERP Modules
       case 'commercial': return <CommercialDesk />;
       case 'prepress': return <PrepressArtwork />;
       case 'planning': return <ProductionPlanning />;
       case 'press_terminal': return <PrintingTerminal />;
-      case 'finishing_qc': return <FinishingQCModule />;
+      case 'finishing': return <FinishingModule />;
+      case 'qc':
+      case 'qc_packing':
+      case 'qc_inspection': return <QualityControlModule />;
       case 'inventory': return <InventoryManagement />;
       case 'dispatch': return <DispatchLogisticsModule />;
       case 'billing': return <AccountsBilling />;
@@ -59,10 +64,9 @@ const MainContent = () => {
         return <CommercialDesk />;
       case 'production':
         return <ProductionPlanning />;
-      case 'finishing':
       case 'associates':
-      case 'qc_packing':
-        return <FinishingQCModule />;
+      case 'finishing_qc':
+        return <FinishingModule />;
       case 'procurement':
         return <InventoryManagement />;
       case 'rejections':
@@ -101,6 +105,7 @@ const MainContent = () => {
       <InvoiceModal />
       <QuoteModal />
       <ControlGatesModal />
+      <QCFlagModal />
       <EnquiryFormModal
         isOpen={isMasterEnquiryModalOpen}
         onClose={() => setIsMasterEnquiryModalOpen(false)}

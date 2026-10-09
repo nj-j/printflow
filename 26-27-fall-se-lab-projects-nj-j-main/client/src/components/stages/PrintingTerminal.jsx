@@ -33,7 +33,8 @@ import {
   Building2,
   ArrowRight,
   Eye,
-  Boxes
+  Boxes,
+  Flag
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
@@ -44,7 +45,7 @@ const MACHINE_FLEET = [
     id: 'mac-1',
     name: 'Ryobi 32',
     shortName: 'Ryobi 32',
-    plant: 'Kalkere Plant',
+    plant: 'Ramamurthy Nagar Plant',
     type: 'Offset Press (Single/2-Color)',
     maxSheet: '13" x 19"',
     speed: '10,000 IPH',
@@ -60,7 +61,7 @@ const MACHINE_FLEET = [
     id: 'mac-3',
     name: 'Lithrone 26',
     shortName: 'Lithrone 26',
-    plant: 'Kalkere Plant',
+    plant: 'Ramamurthy Nagar Plant',
     type: 'Komori Lithrone Multi-Color Offset',
     maxSheet: '20" x 26"',
     speed: '13,000 IPH',
@@ -76,7 +77,7 @@ const MACHINE_FLEET = [
     id: 'mac-2',
     name: 'Ryobi 660',
     shortName: 'Ryobi 660',
-    plant: 'Byrathi Plant',
+    plant: 'Ramamurthy Nagar Plant',
     type: 'Offset Press (Multi-Color 4-Color)',
     maxSheet: '20" x 26"',
     speed: '12,000 IPH',
@@ -90,8 +91,8 @@ const MACHINE_FLEET = [
   },
   {
     id: 'mac-4',
-    name: 'KMC4080 (Kalkere)',
-    shortName: 'KMC4080 Kalkere',
+    name: 'Konica Minolta C4080',
+    shortName: 'Konica Minolta C4080',
     plant: 'Kalkere Plant',
     type: 'Konica Minolta AccurioPress Color',
     maxSheet: '13" x 19.2"',
@@ -101,23 +102,7 @@ const MACHINE_FLEET = [
     badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
     headerBg: 'bg-gradient-to-r from-amber-50 to-yellow-50',
     accentBorder: 'border-amber-400',
-    initials: 'KC4',
-    category: 'Digital'
-  },
-  {
-    id: 'mac-5',
-    name: 'KMC4080 (Byrathi)',
-    shortName: 'KMC4080 Byrathi',
-    plant: 'Byrathi Plant',
-    type: 'Konica Minolta AccurioPress Color',
-    maxSheet: '13" x 19.2"',
-    speed: '81 PPM (4,860 IPH)',
-    status: 'Idle',
-    colorTheme: 'rose',
-    badgeClass: 'bg-rose-100 text-rose-800 border-rose-200',
-    headerBg: 'bg-gradient-to-r from-rose-50 to-pink-50',
-    accentBorder: 'border-rose-400',
-    initials: 'KB4',
+    initials: 'KMC',
     category: 'Digital'
   },
   {
@@ -151,10 +136,10 @@ export const PrintingTerminal = () => {
     setActiveSubTab,
     prepressJobs,
     inventory,
-    deductPaperInventory
+    deductPaperInventory,
+    openQCFlagModal,
+    issues
   } = useApp();
-
-  const currentSubTab = activeSubTab || 'live_terminal';
 
   // Filter paper inventory items (category === 'Paper')
   const paperInventory = (inventory || []).filter(item => item.category === 'Paper');
@@ -162,7 +147,6 @@ export const PrintingTerminal = () => {
   // Two-View Window State ('kanban' or 'list')
   const [viewMode, setViewMode] = useState('kanban');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all', 'offset', 'digital', 'running', 'rush'
   const [selectedPlant, setSelectedPlant] = useState('all'); // 'all', 'Kalkere', 'Byrathi'
   const [feedbackToast, setFeedbackToast] = useState(null);
 
@@ -222,25 +206,29 @@ export const PrintingTerminal = () => {
 
   const getJobPaperState = (job) => {
     const current = jobPaperUsage[job.id];
-    if (current) return current;
-
     const defaultPaperId = getInitialPaperItemId(job);
-    const defaultSheets = job.sheets_used || job.print_quantity || 1000;
-    const isAlreadyDeducted = !!job.paper_deducted;
+    const defaultSheets = job.sheets_used ? '' : (job.print_quantity || 1000);
+
+    if (current) {
+      return {
+        paperItemId: current.paperItemId || defaultPaperId,
+        sheetsToAdd: current.sheetsToAdd !== undefined ? current.sheetsToAdd : defaultSheets,
+        lastDeducted: current.lastDeducted || 0
+      };
+    }
 
     return {
       paperItemId: defaultPaperId,
-      sheetsUsed: defaultSheets,
-      isDeducted: isAlreadyDeducted
+      sheetsToAdd: defaultSheets,
+      lastDeducted: 0
     };
   };
 
   const updateJobPaperState = (jobId, field, val) => {
     setJobPaperUsage(prev => {
       const cur = prev[jobId] || {
-        paperItemId: paperInventory[0]?.id || 'inv-1',
-        sheetsUsed: 1000,
-        isDeducted: false
+        paperItemId: getInitialPaperItemId(jobOrders.find(j => j.id === jobId) || {}),
+        sheetsToAdd: ''
       };
       return {
         ...prev,
@@ -254,46 +242,50 @@ export const PrintingTerminal = () => {
 
   const handleDeductPaper = (job) => {
     const state = getJobPaperState(job);
-    const sheets = Number(state.sheetsUsed) || 0;
-    if (sheets <= 0) {
-      showNotification('Please enter a valid number of sheets used.');
+    const sheetsToAdd = Number(state.sheetsToAdd) || 0;
+    if (sheetsToAdd <= 0) {
+      showNotification('Please enter a valid number of sheets to deduct.');
       return;
     }
 
-    const selectedItem = paperInventory.find(p => p.id === state.paperItemId);
+    const selectedItem = paperInventory.find(p => p.id === state.paperItemId) || paperInventory[0];
     const itemName = selectedItem?.name || 'Paper Stock';
+    const currentTotal = Number(job.sheets_used) || 0;
+    const newTotal = currentTotal + sheetsToAdd;
 
-    // Deduct from inventory in AppContext
+    // Deduct from warehouse inventory in AppContext
     if (deductPaperInventory) {
-      deductPaperInventory(state.paperItemId, sheets, job.job_ticket_number);
+      deductPaperInventory(state.paperItemId, sheetsToAdd, job.job_ticket_number);
     }
 
-    // Update job order state
+    // Update job order state with cumulative total
     updateJobOrder(job.id, {
-      sheets_used: sheets,
+      sheets_used: newTotal,
       deducted_paper_item_id: state.paperItemId,
       deducted_paper_name: itemName,
       paper_deducted: true
     });
 
     // Add note to job comments
-    const reamsEquivalent = selectedItem?.unit_of_measure === 'Reams' ? ` (${(sheets / 500).toFixed(2)} Reams)` : '';
+    const isReams = selectedItem?.unit_of_measure === 'Reams';
+    const reamsEquivalent = isReams ? ` (${(sheetsToAdd / 500).toFixed(2)} Reams)` : '';
     addJobComment(
       job.id,
-      `Deducted ${sheets.toLocaleString()} sheets${reamsEquivalent} of ${itemName} from inventory for press run.`,
+      `Deducted +${sheetsToAdd.toLocaleString()} sheets${reamsEquivalent} of ${itemName} from inventory. Total sheets used: ${newTotal.toLocaleString()}.`,
       0
     );
 
-    // Update local state
+    // Update local state - clear sheetsToAdd so operator can repeatedly add more sheets
     setJobPaperUsage(prev => ({
       ...prev,
       [job.id]: {
         ...state,
-        isDeducted: true
+        sheetsToAdd: '',
+        lastDeducted: sheetsToAdd
       }
     }));
 
-    showNotification(`Deducted ${sheets.toLocaleString()} sheets of ${itemName}! Inventory balance reduced.`);
+    showNotification(`Deducted ${sheetsToAdd.toLocaleString()} sheets of ${itemName}! Total logged: ${newTotal.toLocaleString()} sheets.`);
   };
 
   // Helper to resolve machine for each job
@@ -311,7 +303,7 @@ export const PrintingTerminal = () => {
     if (m.includes('kmc4080_byrathi') || (m.includes('4080') && m.includes('byrathi'))) {
       return 'mac-5';
     }
-    if (m.includes('kmc4080') || (m.includes('4080') && m.includes('kalkere')) || m.includes('accuriopress')) {
+    if (m.includes('kmc4080') || (m.includes('4080') && (m.includes('ramamurthy') || m.includes('rammamurthy') || m.includes('kalkere'))) || m.includes('accuriopress')) {
       return 'mac-4';
     }
     if (m.includes('km2100') || m.includes('mono') || m.includes('black')) {
@@ -447,115 +439,28 @@ export const PrintingTerminal = () => {
       }
     }
 
-    // Filter pills
-    if (filterType === 'offset') {
-      const mac = MACHINE_FLEET.find(m => m.id === getJobMachineId(job));
-      if (mac && mac.category !== 'Offset') return false;
-    } else if (filterType === 'digital') {
-      const mac = MACHINE_FLEET.find(m => m.id === getJobMachineId(job));
-      if (mac && mac.category !== 'Digital') return false;
-    } else if (filterType === 'running') {
-      if (job.current_stage !== 'PressRun') return false;
-    } else if (filterType === 'rush') {
-      if (!job.is_rush_order && job.priority !== 'Urgent') return false;
-    }
-
     return true;
   });
 
-  // Calculate high-level KPIs
-  const totalPressOrders = jobOrders.length;
-  const runningOrdersCount = jobOrders.filter(j => j.current_stage === 'PressRun').length;
-  const deductedCount = jobOrders.filter(j => j.paper_deducted).length;
-
-  const subTabs = [
-    {
-      id: 'live_terminal',
-      label: 'Machine Queue Terminal',
-      icon: Printer,
-      badge: `${runningOrdersCount} Running`,
-      badgeColor: 'bg-emerald-100 text-emerald-800'
-    },
-    {
-      id: 'counters',
-      label: 'Paper Stock Deductions',
-      icon: Boxes,
-      badge: `${deductedCount} Deducted`,
-      badgeColor: 'bg-blue-100 text-blue-700'
-    },
-    {
-      id: 'calibration',
-      label: 'Setup & In-Process QC',
-      icon: CheckCircle2,
-      badge: 'Gate 6 Active',
-      badgeColor: 'bg-amber-100 text-amber-800'
-    }
-  ];
-
   return (
     <div className="space-y-3">
-      {/* Consolidated Module Header with Sub-Tabs */}
+      {/* Consolidated Module Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-2xs select-none">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-[1600px] mx-auto">
+        <div className="flex items-center justify-between gap-3 max-w-[1600px] mx-auto">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs font-mono">
               04
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">Press Terminal (MES)</h1>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-                  Consolidated Suite
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Machine-segregated press scheduling, paper substrate consumption, and real-time inventory deduction
-              </p>
+              <h1 className="text-base font-bold text-slate-900 tracking-tight">Press Terminal (MES)</h1>
+              <p className="text-xs text-slate-500">Live press schedule, machine queue, and substrate consumption</p>
             </div>
-          </div>
-
-          {/* Sub-Tab Navigation Bar */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 text-xs">
-            {subTabs.map(tab => {
-              const Icon = tab.icon;
-              const isActive = currentSubTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveSubTab(tab.id)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
-                    isActive
-                      ? 'bg-white text-[#001523] font-bold shadow-xs border border-slate-200'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                  }`}
-                >
-                  <Icon size={14} className={isActive ? 'text-emerald-600' : 'text-slate-500'} />
-                  <span>{tab.label}</span>
-                  {tab.badge && (
-                    <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold ${tab.badgeColor}`}>
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
           </div>
         </div>
       </div>
 
       <div className="p-4 max-w-[1600px] mx-auto space-y-4 text-xs select-none">
-        {/* Gate 6 Banner */}
-        <div className="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-950">
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={16} className="text-emerald-700 shrink-0" />
-            <span>
-              <b>[Gate 6 Enforced]:</b> Press Operator Material Consumption requires sheet count verification and paper inventory deduction before bindery handover.
-            </span>
-          </div>
-          <span className="font-mono text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-bold">
-            Gate 6 Calibrated
-          </span>
-        </div>
+
 
         {/* Feedback Toast */}
         {feedbackToast && (
@@ -635,33 +540,11 @@ export const PrintingTerminal = () => {
                 onChange={(e) => setSelectedPlant(e.target.value)}
                 className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
               >
-                <option value="all">All Plants (Kalkere & Byrathi)</option>
-                <option value="Kalkere">Plant #01 • Kalkere</option>
+                <option value="all">All Plants (Ramamurthy Nagar, Byrathi & Kalkere)</option>
+                <option value="Ramamurthy Nagar">Plant #01 • Ramamurthy Nagar</option>
                 <option value="Byrathi">Plant #02 • Byrathi</option>
+                <option value="Kalkere">Plant #03 • Kalkere</option>
               </select>
-            </div>
-
-            {/* Fleet Type Pills */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[11px]">
-              {[
-                { id: 'all', label: 'All Orders' },
-                { id: 'offset', label: 'Offset Fleet' },
-                { id: 'digital', label: 'Digital Fleet' },
-                { id: 'running', label: 'Running Now' },
-                { id: 'rush', label: 'Rush Orders' }
-              ].map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setFilterType(f.id)}
-                  className={`px-2 py-1 rounded font-semibold transition cursor-pointer ${
-                    filterType === f.id
-                      ? 'bg-white text-emerald-800 shadow-2xs font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
             </div>
 
             {/* Expand / Collapse All */}
@@ -773,126 +656,144 @@ export const PrintingTerminal = () => {
 
                         // Sequential Work Order Rank
                         const orderRank = idx + 1;
-                        const orderLabel = isJobRunning
-                          ? `#${orderRank} RUNNING NOW`
-                          : orderRank === 1
-                            ? `#${orderRank} NEXT IN LINE`
-                            : `#${orderRank} IN QUEUE`;
+
+                        // Prepress match for version, approval, date & specs
+                        const prepressMatch = prepressJobs?.find(p => p.job_ticket_number === job.job_ticket_number);
+                        const isApproved = (prepressMatch?.customer_approval_status === 'Approved') || (job.customer_approval_status === 'Approved');
+                        const isAuthorized = prepressMatch?.production_release_authorized !== false;
+                        const plateCount = prepressMatch?.ctp_plates_generated || 4;
+                        const artworkType = prepressMatch?.artwork_type || job.production_type || 'New Design';
+                        const versionTag = job.current_version || prepressMatch?.current_version || 'V3';
+                        const jobDate = prepressMatch?.proof_shared_date || job.target_completion_date || job.created_at;
+                        const formattedDate = jobDate
+                          ? new Date(jobDate).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            })
+                          : '26 Aug 2026';
+
+                        const statusLabel = isJobRunning
+                          ? 'Running'
+                          : isApproved
+                            ? 'Approved'
+                            : isUrgent
+                              ? 'Rush'
+                              : 'Pending';
+
+                        const statusClass = isJobRunning
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse'
+                          : isApproved
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : isUrgent
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200';
 
                         return (
                           <div
                             key={job.id}
-                            className={`rounded-lg border transition-all text-xs overflow-hidden w-full max-w-full box-border ${
-                              isUrgent
-                                ? 'bg-amber-50/50 border-amber-300 ring-1 ring-amber-300/40 shadow-xs'
-                                : isJobRunning
-                                  ? 'bg-emerald-50/40 border-emerald-300 ring-1 ring-emerald-300/30 shadow-xs'
-                                  : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
-                            } p-2.5 space-y-2`}
+                            onClick={() => toggleExpandJob(job.id)}
+                            className={`bg-white border rounded-lg p-2.5 transition flex flex-col gap-1.5 select-none cursor-pointer group w-full max-w-full box-border ${
+                              isExpanded
+                                ? 'border-purple-400 shadow-md ring-1 ring-purple-300'
+                                : isUrgent
+                                  ? 'border-amber-300 hover:border-amber-400 shadow-2xs'
+                                  : isJobRunning
+                                    ? 'border-emerald-300 hover:border-emerald-400 shadow-2xs'
+                                    : 'border-slate-200 shadow-xs hover:border-slate-400 hover:shadow-xs'
+                            }`}
+                            title={isExpanded ? 'Click to collapse card' : `Queue #${orderRank} • Click to expand details`}
                           >
-                            {/* Card Top Strip: Sequential Rank + Ticket + Priority */}
-                            <div className="flex items-center justify-between gap-1">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono ${
-                                isJobRunning
-                                  ? 'bg-emerald-600 text-white animate-pulse'
-                                  : orderRank === 1
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-200 text-slate-700'
-                              }`}>
-                                {orderLabel}
-                              </span>
-
-                              <div className="flex items-center gap-1">
-                                {isUrgent && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-600 text-white flex items-center gap-0.5 animate-pulse">
-                                    <Zap size={9} /> RUSH
-                                  </span>
-                                )}
-                                <span className="font-mono text-[10px] font-bold text-slate-800">
+                            {/* Top Bar: Ticket No, Current Version & Expand Chevron */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                                   {job.job_ticket_number}
                                 </span>
-                              </div>
-                            </div>
-
-                            {/* Job Description & Customer */}
-                            <div>
-                              <h4 className="font-bold text-slate-900 text-xs leading-snug line-clamp-2">
-                                {job.job_title}
-                              </h4>
-                              <p className="text-[11px] text-slate-600 truncate mt-0.5 font-medium">
-                                Customer: <b>{job.customer_name}</b>
-                              </p>
-                            </div>
-
-                            {/* Paper Stock & Sheets Consumption Summary Box (Replaces Old Impressions Box) */}
-                            <div className="space-y-1 bg-white p-2 rounded border border-slate-200/80 shadow-2xs">
-                              <div className="flex items-center justify-between text-[10px]">
-                                <span className="font-semibold text-slate-600 flex items-center gap-1">
-                                  <Layers size={11} className="text-blue-600" /> Paper Stock:
+                                <span className="font-mono font-bold text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">
+                                  {versionTag}
                                 </span>
-                                <span className="font-bold text-slate-800 truncate max-w-[130px]" title={paperDisplayName}>
-                                  {paperDisplayName.split('(')[0]}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-[10px] font-mono pt-0.5 border-t border-slate-100">
-                                <span className="text-slate-500">Sheets Used:</span>
-                                <span className={`font-bold ${paperState.isDeducted ? 'text-emerald-700' : 'text-blue-900'}`}>
-                                  {paperState.sheetsUsed ? `${Number(paperState.sheetsUsed).toLocaleString()} Sheets` : `${job.print_quantity?.toLocaleString()} Target`}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-[9px] font-mono">
-                                <span className="text-slate-400">Inventory Status:</span>
-                                {paperState.isDeducted ? (
-                                  <span className="text-emerald-700 font-bold flex items-center gap-0.5">
-                                    <Check size={9} /> Deducted
+                                {(job.qc_flagged || issues.some(i => i.job_ticket_number === job.job_ticket_number && !i.resolved)) && (
+                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[9px] bg-rose-600 text-white flex items-center gap-0.5 shadow-2xs">
+                                    <Flag size={8} /> QC
                                   </span>
-                                ) : (
-                                  <span className="text-amber-700 font-semibold">
-                                    Pending Deduction
+                                )}
+                                {job.returned_from_qc && (
+                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[9px] bg-amber-100 text-amber-800 border border-amber-300">
+                                    REWORK
                                   </span>
                                 )}
                               </div>
+
+                              <div className="flex items-center gap-1">
+                                <span className={`px-2 py-0.2 rounded-full font-mono text-[9px] font-bold ${statusClass}`}>
+                                  {statusLabel}
+                                </span>
+                                <span className="text-slate-400 group-hover:text-purple-600 transition p-0.5 rounded">
+                                  {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                </span>
+                              </div>
                             </div>
 
-                            {/* Micro Tech Specs Strip */}
-                            <div className="text-[10px] text-slate-500 flex items-center justify-between pt-0.5 border-t border-slate-100">
-                              <span className="truncate max-w-[130px] font-medium">
-                                SLA: {new Date(job.target_completion_date).toLocaleDateString()}
-                              </span>
-                              <span className="font-mono font-bold text-blue-700">
-                                {job.color_spec?.split(' ')[0] || '4/4'}
-                              </span>
-                            </div>
+                            {/* CONDENSED VIEW (Identical to Pre-Press Studio & media_1791484645487_8ff19fa0.png) */}
+                            {!isExpanded && (
+                              <div className="space-y-1.5 pt-0.5">
+                                <h4 className="font-bold text-xs text-slate-900 truncate leading-snug">
+                                  {job.customer_name}
+                                </h4>
 
-                            {/* Last Note Bubble */}
-                            {activeNote && !isExpanded && (
-                              <div className="bg-slate-50 p-1.5 rounded border border-slate-100 text-[10px] text-slate-700 italic line-clamp-1">
-                                "{activeNote}"
+                                {/* Last Note snippet in collapsed view */}
+                                {activeNote && (
+                                  <div className="text-[10px] text-slate-500 italic truncate" title={`Last Note: ${activeNote}`}>
+                                    "{activeNote}"
+                                  </div>
+                                )}
+
+                                {/* Minimal Date + Artwork Type Bottom Bar */}
+                                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-100">
+                                  <span className="flex items-center gap-1 font-semibold text-slate-700">
+                                    <Calendar size={11} className="text-purple-600" />
+                                    <span>{formattedDate}</span>
+                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <span className="px-1 py-0.2 bg-slate-100 rounded text-slate-600 text-[9px]">
+                                      {artworkType}
+                                    </span>
+                                    {job.sheets_used > 0 ? (
+                                      <span className="font-bold text-emerald-700 text-[9px]" title={`${Number(job.sheets_used).toLocaleString()} sheets deducted`}>
+                                        {Number(job.sheets_used).toLocaleString()} sh
+                                      </span>
+                                    ) : isAuthorized ? (
+                                      <span className="font-bold text-emerald-700 text-[9px]">
+                                        {plateCount} Plt
+                                      </span>
+                                    ) : (
+                                      <span className="text-amber-700 text-[9px]">Rev</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             )}
-
-                            {/* Expand / Collapse Button */}
-                            <button
-                              type="button"
-                              onClick={() => toggleExpandJob(job.id)}
-                              className="w-full py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
-                            >
-                              {isExpanded ? (
-                                <>
-                                  <ChevronUp size={12} /> Hide Work Order Terminal
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown size={12} /> Work Order Terminal & Paper Input
-                                </>
-                              )}
-                            </button>
 
                             {/* ========================================================== */}
                             {/* EXPANDED VIEW: PAPER SUBSTRATE CONSUMPTION & DEDUCTION    */}
                             {/* ========================================================== */}
                             {isExpanded && (
-                              <div className="space-y-3 pt-2 border-t border-slate-200 animate-in fade-in duration-100">
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="space-y-3 pt-2 border-t border-slate-200 animate-in fade-in duration-100"
+                              >
+                                {/* Job Title & Specs Banner */}
+                                <div className="bg-slate-50 p-2 rounded border border-slate-200 space-y-0.5">
+                                  <h4 className="font-bold text-slate-900 text-xs leading-snug">
+                                    {job.job_title}
+                                  </h4>
+                                  <div className="flex items-center justify-between text-[11px] text-slate-600">
+                                    <span>Customer: <strong className="text-slate-800">{job.customer_name}</strong></span>
+                                    <span className="font-mono text-[10px] text-blue-700 font-bold">{job.color_spec?.split(' ')[0] || '4/4'}</span>
+                                  </div>
+                                </div>
+
                                 {/* Last Note Full View */}
                                 {activeNote && (
                                   <div className="bg-amber-50/70 p-2 rounded-lg border border-amber-200/80 text-[11px] text-amber-950">
@@ -906,32 +807,33 @@ export const PrintingTerminal = () => {
                                   </div>
                                 )}
 
-                                {/* PAPER SUBSTRATE CONSUMPTION & INVENTORY DEDUCTION */}
+                                {/* PAPER SUBSTRATE CONSUMPTION & REPEATED INVENTORY DEDUCTION */}
                                 {(() => {
                                   const currentPaperItem = selectedItem || paperInventory[0];
-                                  const sheetsCount = Number(paperState.sheetsUsed) || 0;
+                                  const sheetsToAdd = Number(paperState.sheetsToAdd) || 0;
                                   const isReams = currentPaperItem?.unit_of_measure === 'Reams';
-                                  const reamsEquivalent = isReams ? (sheetsCount / 500).toFixed(2) : sheetsCount;
+                                  const reamsEquivalent = isReams && sheetsToAdd > 0 ? (sheetsToAdd / 500).toFixed(2) : sheetsToAdd;
+                                  const totalSheetsUsed = Number(job.sheets_used) || 0;
+                                  const reamsTotal = isReams ? (totalSheetsUsed / 500).toFixed(2) : totalSheetsUsed;
 
                                   return (
                                     <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2 box-border w-full max-w-full overflow-hidden">
+                                      {/* Header with Total Sheets Logged badge (similar to Pre-press Logged: X hrs) */}
                                       <div className="flex items-center justify-between text-[11px] font-bold text-blue-950 gap-1">
                                         <span className="flex items-center gap-1.5 truncate min-w-0">
                                           <Layers size={13} className="text-blue-700 shrink-0" />
-                                          <span className="truncate">Paper & Inventory:</span>
+                                          <span className="truncate">Paper Stock & Usage:</span>
                                         </span>
-                                        {paperState.isDeducted && (
-                                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 flex items-center gap-1 shrink-0">
-                                            <Check size={10} className="shrink-0" /> Deducted
-                                          </span>
-                                        )}
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-blue-100 text-blue-800 font-bold border border-blue-200 flex items-center gap-1 shrink-0">
+                                          Total Used: <b>{totalSheetsUsed.toLocaleString()} sh</b>
+                                        </span>
                                       </div>
 
                                       {/* "Which Paper" - Paper Dropdown Selector */}
                                       <div className="space-y-1 w-full max-w-full">
                                         <div className="flex items-center justify-between text-[10px] gap-1">
                                           <label className="font-semibold text-slate-700 truncate">
-                                            Which Paper:
+                                            Which Paper Substrate:
                                           </label>
                                           {currentPaperItem && (
                                             <span className="text-slate-500 font-mono text-[9px] truncate text-right">
@@ -944,9 +846,8 @@ export const PrintingTerminal = () => {
                                         </div>
                                         <select
                                           value={paperState.paperItemId}
-                                          disabled={paperState.isDeducted}
                                           onChange={(e) => updateJobPaperState(job.id, 'paperItemId', e.target.value)}
-                                          className="w-full max-w-full box-border bg-white border border-slate-300 rounded p-1.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-blue-500 disabled:bg-slate-100 cursor-pointer truncate"
+                                          className="w-full max-w-full box-border bg-white border border-slate-300 rounded p-1.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-blue-500 cursor-pointer truncate"
                                         >
                                           {paperInventory.map(item => (
                                             <option key={item.id} value={item.id}>
@@ -956,51 +857,85 @@ export const PrintingTerminal = () => {
                                         </select>
                                       </div>
 
-                                      {/* "No. of Sheets Used" - Number Input */}
-                                      {/* "No. of Sheets Used" & Deduct Button Stacked to stay strictly within card */}
-                                      <div className="space-y-1.5 w-full max-w-full">
+                                      {/* Preset Quick-Add Buttons (similar to +0.5h, +1.0h in pre-press) */}
+                                      <div className="space-y-1 w-full max-w-full">
                                         <div className="flex items-center justify-between text-[10px] gap-1">
                                           <label className="font-semibold text-slate-700 truncate">
-                                            No. of Sheets Used:
+                                            Sheets to Deduct:
                                           </label>
-                                          <span className="text-slate-500 font-mono text-[9px] truncate text-right">
-                                            {isReams && sheetsCount > 0 ? `= ${reamsEquivalent} Reams` : `Target: ${job.print_quantity?.toLocaleString()}`}
-                                          </span>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            {['100', '250', '500', '1000'].map(val => (
+                                              <button
+                                                key={val}
+                                                type="button"
+                                                onClick={() => updateJobPaperState(job.id, 'sheetsToAdd', val)}
+                                                className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border transition cursor-pointer ${
+                                                  String(paperState.sheetsToAdd) === val
+                                                    ? 'bg-blue-600 text-white border-blue-600'
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                                }`}
+                                              >
+                                                +{Number(val).toLocaleString()}
+                                              </button>
+                                            ))}
+                                          </div>
                                         </div>
-                                        <input
-                                          type="number"
-                                          min="1"
-                                          disabled={paperState.isDeducted}
-                                          value={paperState.sheetsUsed || ''}
-                                          placeholder={`Target: ${job.print_quantity || 1000} sheets`}
-                                          onChange={(e) => updateJobPaperState(job.id, 'sheetsUsed', e.target.value)}
-                                          className="w-full max-w-full box-border bg-white border border-slate-300 rounded p-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 disabled:bg-slate-100"
-                                        />
+
+                                        {/* Number Input & Reams preview */}
+                                        <div className="relative w-full max-w-full">
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            value={paperState.sheetsToAdd !== undefined ? paperState.sheetsToAdd : ''}
+                                            placeholder="Enter sheets to deduct... (e.g. 500)"
+                                            onChange={(e) => updateJobPaperState(job.id, 'sheetsToAdd', e.target.value)}
+                                            className="w-full max-w-full box-border bg-white border border-slate-300 rounded p-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500"
+                                          />
+                                          {sheetsToAdd > 0 && isReams && (
+                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
+                                              = {reamsEquivalent} Reams
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Deduct Button - Stays enabled so operator can repeatedly add sheets */}
                                         <button
                                           type="button"
                                           onClick={() => handleDeductPaper(job)}
-                                          disabled={!paperState.sheetsUsed || Number(paperState.sheetsUsed) <= 0 || paperState.isDeducted}
+                                          disabled={!paperState.sheetsToAdd || Number(paperState.sheetsToAdd) <= 0}
                                           className="w-full max-w-full box-border py-1.5 px-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded text-[11px] transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs text-center min-w-0"
                                           title="Reduce paper stock from warehouse inventory"
                                         >
                                           <Boxes size={12} className="shrink-0" />
-                                          <span className="truncate">{paperState.isDeducted ? 'Deducted from Inventory' : 'Deduct from Inventory'}</span>
+                                          <span className="truncate">
+                                            {sheetsToAdd > 0
+                                              ? `Deduct +${sheetsToAdd.toLocaleString()} Sheets from Inventory`
+                                              : 'Deduct Sheets from Inventory'}
+                                          </span>
                                         </button>
                                       </div>
 
-                                      {/* Live Status Message */}
-                                      {paperState.isDeducted ? (
+                                      {/* Live Cumulative Status Message */}
+                                      {totalSheetsUsed > 0 ? (
                                         <div className="p-2 bg-emerald-50 border border-emerald-200 rounded text-[10px] text-emerald-900 flex flex-col gap-0.5 box-border w-full">
-                                          <span className="break-words">
-                                            Deducted <b>{Number(paperState.sheetsUsed).toLocaleString()} sheets</b> from <b>{currentPaperItem?.name}</b>.
-                                          </span>
-                                          <span className="font-mono font-bold text-emerald-800">
-                                            Remaining: {currentPaperItem?.quantity_on_hand} {currentPaperItem?.unit_of_measure}
-                                          </span>
+                                          <div className="flex items-center justify-between font-mono">
+                                            <span>
+                                              Cumulative Sheets Used:
+                                            </span>
+                                            <span className="font-bold text-emerald-800">
+                                              {totalSheetsUsed.toLocaleString()} sheets ({reamsTotal} Reams)
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center justify-between text-[9px] text-slate-500 pt-0.5 border-t border-emerald-200/60 font-mono">
+                                            <span>Warehouse Stock ({currentPaperItem?.name?.split('(')[0]?.trim()}):</span>
+                                            <span className="font-bold text-slate-800">
+                                              {currentPaperItem?.quantity_on_hand} {currentPaperItem?.unit_of_measure}
+                                            </span>
+                                          </div>
                                         </div>
                                       ) : (
                                         <p className="text-[10px] text-blue-700/80 italic break-words">
-                                          Deducting will reduce {currentPaperItem?.name} stock by {reamsEquivalent} {currentPaperItem?.unit_of_measure || 'units'}.
+                                          Target: {job.print_quantity?.toLocaleString() || 1000} sheets. Enter sheets used and click Deduct to reduce inventory.
                                         </p>
                                       )}
                                     </div>
@@ -1025,8 +960,8 @@ export const PrintingTerminal = () => {
                                   </select>
                                 </div>
 
-                                {/* 3 Pop-Out Trigger Buttons */}
-                                <div className="grid grid-cols-3 gap-1 pt-1 w-full max-w-full box-border">
+                                {/* 4 Pop-Out Trigger Buttons */}
+                                <div className="grid grid-cols-4 gap-1 pt-1 w-full max-w-full box-border">
                                   <button
                                     type="button"
                                     onClick={() => setSpecSheetModalJob(job)}
@@ -1034,7 +969,7 @@ export const PrintingTerminal = () => {
                                     title="Pop out technical specification sheet"
                                   >
                                     <FileText size={11} className="text-blue-600 shrink-0" />
-                                    <span className="truncate">Spec Sheet</span>
+                                    <span className="truncate">Specs</span>
                                   </button>
 
                                   <button
@@ -1048,6 +983,16 @@ export const PrintingTerminal = () => {
                                   >
                                     <MessageSquare size={11} className="text-purple-600 shrink-0" />
                                     <span className="truncate">Shift Log</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => openQCFlagModal(job, 'Press Terminal')}
+                                    className="min-w-0 w-full py-1.5 px-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs overflow-hidden"
+                                    title="Raise Quality Control Flag on this press run"
+                                  >
+                                    <Flag size={11} className="text-amber-600 shrink-0" />
+                                    <span className="truncate">QC Flag</span>
                                   </button>
 
                                   <button
@@ -1187,6 +1132,16 @@ export const PrintingTerminal = () => {
                               <span className="font-mono font-bold text-slate-900">
                                 {job.job_ticket_number}
                               </span>
+                              {(job.qc_flagged || issues.some(i => i.job_ticket_number === job.job_ticket_number && !i.resolved)) && (
+                                <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[8px] bg-rose-600 text-white flex items-center gap-0.5">
+                                  <Flag size={8} /> QC
+                                </span>
+                              )}
+                              {job.returned_from_qc && (
+                                <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[8px] bg-amber-100 text-amber-800 border border-amber-300">
+                                  REWORK
+                                </span>
+                              )}
                             </div>
                             {isUrgent && (
                               <span className="inline-block mt-0.5 px-1 py-0.2 rounded text-[8px] font-bold bg-rose-100 text-rose-700 font-mono">
@@ -1223,9 +1178,9 @@ export const PrintingTerminal = () => {
                               </span>
                               <div className="flex items-center justify-between text-[10px] font-mono">
                                 <span className="font-bold text-blue-900">
-                                  {paperState.sheetsUsed ? `${Number(paperState.sheetsUsed).toLocaleString()} sheets` : `${job.print_quantity?.toLocaleString()} target`}
+                                  {job.sheets_used ? `${Number(job.sheets_used).toLocaleString()} sheets` : `${job.print_quantity?.toLocaleString()} target`}
                                 </span>
-                                {paperState.isDeducted ? (
+                                {job.sheets_used > 0 ? (
                                   <span className="text-emerald-700 font-bold flex items-center gap-0.5 text-[9px]">
                                     <Check size={9} /> Deducted
                                   </span>
@@ -1287,6 +1242,14 @@ export const PrintingTerminal = () => {
                                 title="Shift Log & Comments"
                               >
                                 <MessageSquare size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openQCFlagModal(job, 'Press Terminal')}
+                                className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded border border-amber-300 transition cursor-pointer"
+                                title="Raise Quality Control Flag"
+                              >
+                                <Flag size={12} />
                               </button>
                               <button
                                 type="button"

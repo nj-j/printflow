@@ -104,20 +104,10 @@ export const InventoryManagement = () => {
       <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-2xs select-none">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-[1600px] mx-auto">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs">
-              06
+            <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs font-mono">
+              07
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">Inventory & Stores</h1>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">
-                  Consolidated Suite
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Warehouse substrate stock balances, offcut lot recycling, and supplier purchase orders (PO)
-              </p>
-            </div>
+            <h1 className="text-base font-bold text-slate-900 tracking-tight">Inventory & Stores</h1>
           </div>
 
           {/* Sub-Tab Navigation Bar */}
@@ -157,7 +147,7 @@ export const InventoryManagement = () => {
               ? 'Offcut lot inventory recovered from press runs and post-press trimming'
               : currentSubTab === 'purchase_orders'
               ? 'Purchase orders issued to paper mills and consumables distributors'
-              : 'Real-time inventory levels across Kalkere & Byrathi warehouse facilities'}
+              : 'Real-time inventory levels across Ramamurthy Nagar, Byrathi & Kalkere warehouse facilities'}
           </div>
           <div className="flex gap-2">
             <button className="btn btn-secondary text-xs" onClick={() => setShowTransferModal(true)}>

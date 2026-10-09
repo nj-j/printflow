@@ -98,11 +98,10 @@ export const ReportsAnalytics = () => {
 
           <div className="chart-bar-list">
             {[
-              { name: 'Ryobi 32 (Offset - Kalkere Branch)', utilization: 84, color: '#2563eb', hours: '13.5 hrs / day' },
-              { name: 'Ryobi 660 (Offset - Byrathi Branch)', utilization: 88, color: '#16a34a', hours: '14.2 hrs / day' },
-              { name: 'Lithrone 26 (Komori - Kalkere Branch)', utilization: 76, color: '#0284c7', hours: '12.0 hrs / day' },
-              { name: 'KMC4080_Kalkere (Digital Color - Kalkere)', utilization: 92, color: '#7c3aed', hours: '15.5 hrs / day' },
-              { name: 'KMC4080_Byrathi (Digital Color - Byrathi)', utilization: 89, color: '#d97706', hours: '14.8 hrs / day' },
+              { name: 'Ryobi 32 (Offset - Ramamurthy Nagar Branch)', utilization: 84, color: '#2563eb', hours: '13.5 hrs / day' },
+              { name: 'Ryobi 660 (Offset - Ramamurthy Nagar Branch)', utilization: 88, color: '#16a34a', hours: '14.2 hrs / day' },
+              { name: 'Lithrone 26 (Komori - Ramamurthy Nagar Branch)', utilization: 76, color: '#0284c7', hours: '12.0 hrs / day' },
+              { name: 'Konica Minolta C4080 (Digital Color - Kalkere Branch)', utilization: 92, color: '#7c3aed', hours: '15.5 hrs / day' },
               { name: 'KM2100 Black (Digital Mono - Byrathi)', utilization: 94, color: '#0f172a', hours: '16.0 hrs / day' },
             ].map(item => (
               <div key={item.name} className="bar-metric-row">

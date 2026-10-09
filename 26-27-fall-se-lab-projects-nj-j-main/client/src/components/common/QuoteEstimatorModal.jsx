@@ -348,9 +348,9 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
               value={targetMachine}
               onChange={(e) => setTargetMachine(e.target.value)}
             >
-              <option value="Lithrone 26">Lithrone 26 (Komori 4-Color - Kalkere)</option>
-              <option value="Ryobi 32">Ryobi 32 (Offset - Kalkere Plant)</option>
-              <option value="Ryobi 660">Ryobi 660 (Offset - Byrathi Plant)</option>
+              <option value="Lithrone 26">Lithrone 26 (Komori 4-Color - Ramamurthy Nagar)</option>
+              <option value="Ryobi 32">Ryobi 32 (Offset - Ramamurthy Nagar Plant)</option>
+              <option value="Ryobi 660">Ryobi 660 (Offset - Ramamurthy Nagar Plant)</option>
               <option value="KMC4080 Digital">Konica Minolta C4080 (Digital Color)</option>
               <option value="KM2100 Black">Konica Minolta 2100 (Digital Mono)</option>
             </select>

@@ -21,16 +21,16 @@ Small-scale offset printing companies operate in a highly dynamic, order-driven 
 
 ## 2. Multi-Plant Architecture & Machine Fleet Specification
 
-PrintFlow ERP coordinates operations across two dedicated production locations:
-- **Kalkere Branch / Plant**
-- **Byrathi Branch / Plant**
+PrintFlow ERP coordinates operations across three dedicated production locations:
+- **Ramamurthy Nagar Branch / Plant** (Offset Press Fleet & Pre-Press CTP)
+- **Byrathi Branch / Plant** (Post-Press Bindery & Monochrome Digital)
+- **Kalkere Branch / Plant** (Konica Minolta Digital Color Production Hub)
 
 ### Registered Printing Machine Fleet:
-1. **Ryobi 32:** Single/Two-Color Offset Press (`Kalkere Plant` — Max Sheet: 13" x 19", 10,000 IPH)
-2. **Ryobi 660:** Multi-Color Offset Press (`Byrathi Plant` — Max Sheet: 20" x 26", 12,000 IPH)
-3. **Lithrone 26:** Komori Lithrone 26 Multi-Color Offset Press (`Kalkere Plant` — Max Sheet: 20" x 26", 13,000 IPH)
-4. **KMC4080_Kalkere:** Konica Minolta AccurioPress C4080 Digital Production Color Press (`Kalkere Branch` — 81 PPM)
-5. **KMC4080_Byrathi:** Konica Minolta AccurioPress C4080 Digital Production Color Press (`Byrathi Branch` — 81 PPM)
+1. **Ryobi 32:** Single/Two-Color Offset Press (`Ramamurthy Nagar Plant` — Max Sheet: 13" x 19", 10,000 IPH)
+2. **Ryobi 660:** Multi-Color Offset Press (`Ramamurthy Nagar Plant` — Max Sheet: 20" x 26", 12,000 IPH)
+3. **Lithrone 26:** Komori Lithrone 26 Multi-Color Offset Press (`Ramamurthy Nagar Plant` — Max Sheet: 20" x 26", 13,000 IPH)
+4. **Konica Minolta C4080:** Konica Minolta AccurioPress C4080 Digital Production Color Press (`Kalkere Branch` — 81 PPM)
 6. **KM2100 Black:** Konica Minolta High-Speed Digital Monochrome Press (`Byrathi Branch` — 100 PPM)
 
 ---
@@ -68,9 +68,9 @@ graph TD
 
 ---
 
-## 4. Consolidated ERP Architecture: 9 Modules with Synchronized Sub-Tabs
+## 4. Consolidated ERP Architecture: 10 Modules with Synchronized Sub-Tabs
 
-To eliminate UI duplication, improve touch terminal usability on the shop floor, and adhere to standard enterprise ERP design, PrintFlow ERP organizes its complete manufacturing pipeline into **9 High-Level Consolidated Modules** equipped with synchronized internal sub-tabs:
+To eliminate UI duplication, improve touch terminal usability on the shop floor, and adhere to standard enterprise ERP design, PrintFlow ERP organizes its complete manufacturing pipeline into **10 High-Level Consolidated Modules** equipped with synchronized internal sub-tabs:
 
 | # | Consolidated Module | Merged Workflows & Features | Internal Sub-Tabs |
 |---|---------------------|-----------------------------|-------------------|
@@ -78,11 +78,12 @@ To eliminate UI duplication, improve touch terminal usability on the shop floor,
 | **02** | **Prepress Studio** | Artwork classification, revision cycles (V1/V2/V3), customer sign-off, CTP plate exposure | **Artwork Pre-Flight**, **Proof Sign-Off**, **CTP Output** |
 | **03** | **Planning & Kanban** | Production scheduling across 5 stages, machine load allocation, 1-click rush fast-tracking | **Digital Job Tickets**, **Machine Allocation**, **Rush Fast-Track** |
 | **04** | **Press Terminal (MES)** | Touch-friendly shop-floor terminal, live impression counting, make-ready logs, density checks | **Live Terminal**, **Impression Counter**, **Setup & Calibration** |
-| **05** | **Finishing & QC** | Guillotine cutting, folding, lamination, binding, outsourced associate challans, QC checklists | **Bindery Operations**, **Outsourced Job-Work**, **QC Inspection** |
-| **06** | **Inventory & Stores** | Substrate stock balances, offcut lot cataloging/recycling, supplier POs, inter-branch transfers | **Raw Stock Levels**, **Offcuts & Excess**, **Supplier POs** |
-| **07** | **Dispatch & Logistics**| 5-Zone route delivery queues, vehicle/driver assignment, security gate passes, rejection/refund | **Route Tracking & Dispatch**, **Gate Pass Clearance**, **Returns & Rework** |
-| **08** | **Finance & Billing** | GST Tax Invoices (HSN `49111010`), dynamic UPI QR settlements, payment receipts, AR aging | **GST Invoicing (HSN 49111010)**, **Receipts & Advances**, **AR Aging** |
-| **09** | **Admin & Analytics** | Executive OEE dashboard (84.2% target), automated notifications (WhatsApp/SMS), master configuration | **Executive Dashboard (OEE)**, **Notification Hub**, **Master Data Config** |
+| **05** | **Finishing & Bindery** | Guillotine cutting, folding, lamination, binding, creasing, and outsourced associate challans | **Bindery Operations**, **Outsourced Job-Work** |
+| **06** | **Quality Control (QC)** | Pre-dispatch tolerance testing, Gate 7 checklist clearance, defect logging, and packaging sign-off | **QC Inspection Queue**, **Defect Register**, **Dual Workspace** |
+| **07** | **Inventory & Stores** | Substrate stock balances, offcut lot cataloging/recycling, supplier POs, inter-branch transfers | **Raw Stock Levels**, **Offcuts & Excess**, **Supplier POs** |
+| **08** | **Dispatch & Logistics**| 5-Zone route delivery queues, vehicle/driver assignment, security gate passes, rejection/refund | **Route Tracking & Dispatch**, **Gate Pass Clearance**, **Returns & Rework** |
+| **09** | **Finance & Billing** | GST Tax Invoices (HSN `49111010`), dynamic UPI QR settlements, payment receipts, AR aging | **GST Invoicing (HSN 49111010)**, **Receipts & Advances**, **AR Aging** |
+| **10** | **Admin & Analytics** | Executive OEE dashboard (84.2% target), automated notifications (WhatsApp/SMS), master configuration | **Executive Dashboard (OEE)**, **Notification Hub**, **Master Data Config** |
 
 ---
 

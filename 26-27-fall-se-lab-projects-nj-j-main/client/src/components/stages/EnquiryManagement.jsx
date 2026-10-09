@@ -101,11 +101,10 @@ export const EnquiryManagement = () => {
     enquiries = [],
     addEnquiry,
     updateEnquiry,
+    addSalesBooking,
     toggleStarEnquiry,
     isMasterEnquiryModalOpen,
     setIsMasterEnquiryModalOpen,
-    estimatorViewMode,
-    setEstimatorViewMode,
     activeSubTab
   } = useApp();
 
@@ -174,8 +173,9 @@ export const EnquiryManagement = () => {
       current_stage: 'Costing'
     });
 
+    let createdQuoteId = null;
     if (quoteDetails?.saveToRegister) {
-      createQuote({
+      const q = createQuote({
         customer_name: selectedEnquiryForQuote.customer_name,
         priority: quoteDetails.priority || 'Normal',
         total_estimated_price: newAmount,
@@ -190,9 +190,40 @@ export const EnquiryManagement = () => {
           }
         ]
       });
+      createdQuoteId = q?.id;
     }
 
-    setToastNotification(`Quotation ₹${newAmount.toLocaleString('en-IN')} generated & applied for ${selectedEnquiryForQuote.customer_name}`);
+    // Automatically reflect in Order Booking tab
+    const advanceReq = Math.round(Number(newAmount) * 0.6);
+    const existingAdv = Number(selectedEnquiryForQuote.advance) || (selectedEnquiryForQuote.status === 'Completed' || selectedEnquiryForQuote.advance_remarks?.toLowerCase().includes('full') ? Number(newAmount) : 0);
+    const isBooked = existingAdv >= advanceReq && advanceReq > 0;
+
+    addSalesBooking({
+      booking_number: selectedEnquiryForQuote.dn_no && selectedEnquiryForQuote.dn_no !== '-' 
+        ? `SO-2026-${selectedEnquiryForQuote.dn_no}` 
+        : `SO-2026-${selectedEnquiryForQuote.id.replace(/\D/g, '') || String(Date.now()).slice(-4)}`,
+      quote_id: createdQuoteId || `q-${selectedEnquiryForQuote.id}`,
+      enquiry_id: selectedEnquiryForQuote.id,
+      customer_id: selectedEnquiryForQuote.customer_id || `cust-${selectedEnquiryForQuote.id}`,
+      customer_name: selectedEnquiryForQuote.customer_name,
+      customer_po_ref: selectedEnquiryForQuote.dn_no && selectedEnquiryForQuote.dn_no !== '-' 
+        ? `DN-${selectedEnquiryForQuote.dn_no}` 
+        : (selectedEnquiryForQuote.enquiry_no || selectedEnquiryForQuote.id),
+      arc_number: null,
+      job_title: quoteDetails?.jobTitle || selectedEnquiryForQuote.job_name || selectedEnquiryForQuote.job_specification || 'Commercial Print Job',
+      confirmation_channel: selectedEnquiryForQuote.source || 'Walk-in',
+      confirmation_date: new Date().toISOString().split('T')[0],
+      order_total: Number(newAmount),
+      advance_required: advanceReq,
+      advance_received: existingAdv,
+      balance_pending: Math.max(0, Number(newAmount) - existingAdv),
+      booking_status: isBooked ? 'Booked' : 'Awaiting Advance',
+      production_release: isBooked,
+      refund_applicable: false,
+      prepress: selectedEnquiryForQuote.prepress && selectedEnquiryForQuote.prepress !== '-' ? selectedEnquiryForQuote.prepress : 'Aruna'
+    });
+
+    setToastNotification(`Quotation ₹${newAmount.toLocaleString('en-IN')} applied! Reflected in Order Booking queue.`);
     setTimeout(() => setToastNotification(null), 4000);
   };
 
@@ -227,11 +258,9 @@ export const EnquiryManagement = () => {
 
   // Filtering enquiries for main table
   const filteredEnquiries = enquiries.filter(e => {
-    // If in Estimation & Quotes menu, filter by quotation generation status
+    // If in Estimation & Quotes menu, strictly keep only pending quotations
     if (isEstimatorView) {
-      if (estimatorViewMode === 'pending' && isQuotationGenerated(e)) return false;
-      if (estimatorViewMode === 'quoted' && !isQuotationGenerated(e)) return false;
-      // if estimatorViewMode === 'all', don't filter out by quote status
+      if (isQuotationGenerated(e)) return false;
     }
 
     if (selectedFolder === 'Starred' && !e.is_starred) return false;
@@ -333,7 +362,6 @@ export const EnquiryManagement = () => {
             <div>
               <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider">COMPLETED</div>
               <div className="text-xl font-black text-emerald-600">{completedCount}</div>
-              <div className="text-xxs text-emerald-700 font-bold">60.0%</div>
             </div>
           </div>
 
@@ -345,7 +373,6 @@ export const EnquiryManagement = () => {
             <div>
               <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider">PENDING</div>
               <div className="text-xl font-black text-amber-600">{pendingCount}</div>
-              <div className="text-xxs text-amber-700 font-bold">20.0%</div>
             </div>
           </div>
 
@@ -357,7 +384,6 @@ export const EnquiryManagement = () => {
             <div>
               <div className="text-xxs font-bold text-slate-400 uppercase tracking-wider">CANCELLED</div>
               <div className="text-xl font-black text-red-600">{cancelledCount}</div>
-              <div className="text-xxs text-red-700 font-bold">20.0%</div>
             </div>
           </div>
 
@@ -389,84 +415,6 @@ export const EnquiryManagement = () => {
 
       {/* Order Desk Main Content: Full-Width Table */}
       <div className="w-full space-y-3">
-        {/* Queue Mode Selector (when in Estimation & Quotations) */}
-        {isEstimatorView && (
-          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setEstimatorViewMode('pending')}
-                  className={`px-3 py-1 rounded-md transition flex items-center gap-1.5 ${
-                    estimatorViewMode === 'pending'
-                      ? 'bg-white text-amber-900 font-bold shadow-xs border border-amber-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Clock size={13} className={estimatorViewMode === 'pending' ? 'text-amber-600' : 'text-slate-400'} />
-                  <span>Pending Quotations</span>
-                  <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] ${
-                    estimatorViewMode === 'pending' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700'
-                  }`}>
-                    {pendingQuotesEnquiries.length}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setEstimatorViewMode('quoted')}
-                  className={`px-3 py-1 rounded-md transition flex items-center gap-1.5 ${
-                    estimatorViewMode === 'quoted'
-                      ? 'bg-white text-emerald-900 font-bold shadow-xs border border-emerald-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <CheckCircle2 size={13} className={estimatorViewMode === 'quoted' ? 'text-emerald-600' : 'text-slate-400'} />
-                  <span>Quoted Records</span>
-                  <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] ${
-                    estimatorViewMode === 'quoted' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
-                  }`}>
-                    {quotedEnquiries.length}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setEstimatorViewMode('all')}
-                  className={`px-3 py-1 rounded-md transition flex items-center gap-1.5 ${
-                    estimatorViewMode === 'all'
-                      ? 'bg-white text-blue-900 font-bold shadow-xs border border-blue-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <span>All Enquiries</span>
-                  <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] ${
-                    estimatorViewMode === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'
-                  }`}>
-                    {enquiries.length}
-                  </span>
-                </button>
-              </div>
-
-              <div className="text-xxs font-semibold text-slate-500">
-                {estimatorViewMode === 'pending' ? (
-                  <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                    Showing only jobs for which quotation has not been generated
-                  </span>
-                ) : estimatorViewMode === 'quoted' ? (
-                  <span className="text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
-                    Showing jobs with completed quotation
-                  </span>
-                ) : (
-                  <span className="text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
-                    Showing all enquiry records
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Table Action Controls */}
         <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-2.5">
@@ -587,6 +535,7 @@ export const EnquiryManagement = () => {
                         <option value="All">All Statuses</option>
                         <option value="Enquiry">Enquiry</option>
                         <option value="Pending">Pending</option>
+                        <option value="Booked">Booked</option>
                         <option value="Completed">Completed</option>
                         <option value="Cancelled">Cancelled</option>
                       </select>
@@ -629,7 +578,7 @@ export const EnquiryManagement = () => {
                     {filteredEnquiries.length === 0 ? (
                       <tr>
                         <td colSpan="7" className="p-8 text-center text-slate-400">
-                          {isEstimatorView && estimatorViewMode === 'pending' ? (
+                          {isEstimatorView ? (
                             <div className="flex flex-col items-center justify-center gap-2 py-4">
                               <CheckCircle2 size={32} className="text-emerald-500" />
                               <span className="font-bold text-slate-700 text-sm">All Quotations Generated!</span>
@@ -702,6 +651,7 @@ export const EnquiryManagement = () => {
                                   <span className={`status-pill text-xxs font-bold ${
                                     isCompleted ? 'bg-emerald-100 text-emerald-800' :
                                     isCancelled ? 'bg-red-100 text-red-700' :
+                                    enq.status === 'Booked' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
                                     enq.status === 'Enquiry' ? 'bg-blue-100 text-blue-800' :
                                     'bg-amber-100 text-amber-800'
                                   }`}>
@@ -713,7 +663,7 @@ export const EnquiryManagement = () => {
                                       const newStage = e.target.value;
                                       updateEnquiry(enq.id, {
                                         current_stage: newStage,
-                                        status: newStage === 'Delivered' ? 'Completed' : (newStage === 'Cancelled' ? 'Cancelled' : 'Pending')
+                                        status: newStage === 'Delivered' ? 'Completed' : (newStage === 'Cancelled' ? 'Cancelled' : (newStage === 'Pre-Press' ? 'Booked' : 'Pending'))
                                       });
                                     }}
                                     className={`text-[10px] font-bold py-0.5 px-1.5 rounded border cursor-pointer focus:outline-none transition shadow-2xs ${getStageBadgeStyle(getEnquiryStage(enq))}`}
@@ -806,7 +756,7 @@ export const EnquiryManagement = () => {
                                           }}
                                           className="btn btn-xs btn-secondary font-semibold flex items-center gap-1.5"
                                         >
-                                          <Edit3 size={13} /> Full Master Form
+                                          <Edit3 size={13} /> Edit
                                         </button>
                                         <button
                                           type="button"
@@ -1028,10 +978,21 @@ export const EnquiryManagement = () => {
         onClose={() => {
           setIsFormModalOpen(false);
           setIsMasterEnquiryModalOpen(false);
+          setEditingEnquiry(null);
         }}
         enquiryData={editingEnquiry}
         onSaveEnquiry={(savedData) => {
-          addEnquiry(savedData);
+          if (editingEnquiry?.id) {
+            updateEnquiry(editingEnquiry.id, savedData);
+            setToastNotification(`Job ${editingEnquiry.enquiry_no || editingEnquiry.id} updated successfully!`);
+          } else {
+            addEnquiry(savedData);
+            setToastNotification('New enquiry added successfully!');
+          }
+          setEditingEnquiry(null);
+          setIsFormModalOpen(false);
+          setIsMasterEnquiryModalOpen(false);
+          setTimeout(() => setToastNotification(null), 3500);
         }}
       />
 

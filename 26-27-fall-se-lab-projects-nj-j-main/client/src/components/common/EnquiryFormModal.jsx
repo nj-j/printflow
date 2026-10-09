@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from './Modal';
 import {
   FileText,
@@ -15,7 +15,9 @@ import {
   Save,
   Clock,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -31,6 +33,24 @@ export const STANDARD_SIZES = [
   '20" x 30" (Double Crown)',
   'Visiting Card (3.5" x 2")',
   'Custom / Other'
+];
+
+export const STANDARD_PAPER_OPTIONS = [
+  '300 GSM Premium Art Card',
+  '350 GSM Art Card',
+  '250 GSM Art Card',
+  '170 GSM Matte Art Paper',
+  '130 GSM Gloss Art Paper',
+  '100 GSM Bond Paper',
+  '80 GSM Sunshine Maplitho',
+  '70 GSM Maplitho Paper',
+  '250 GSM Duplex Board',
+  '300 GSM Cyber XL Board',
+  'Self-Adhesive Chromo Sticker Sheet',
+  'PVC Non-Tearable Sheet',
+  'Kraft Paper 120 GSM',
+  'Butter Paper / Tracing Paper',
+  'Metallic / Textured Specialty Paper'
 ];
 
 export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEnquiry }) => {
@@ -52,6 +72,7 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
   const [otherSource, setOtherSource] = useState('');
 
   // 2. Job Details
+  const [jobTitle, setJobTitle] = useState(enquiryData?.job_name || enquiryData?.job_title || enquiryData?.job_specification || '');
   const [jobTypes, setJobTypes] = useState(enquiryData?.job_types || ['Offset Printing']);
   const [otherJobType, setOtherJobType] = useState('');
   const [jobBrief, setJobBrief] = useState(enquiryData?.job_brief || '');
@@ -69,6 +90,23 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
 
   const [quantity, setQuantity] = useState(enquiryData?.quantity || 1000);
   const [materialPaper, setMaterialPaper] = useState(enquiryData?.paper || '300 GSM Art Card');
+  const [isPaperDropdownOpen, setIsPaperDropdownOpen] = useState(false);
+  const paperDropdownRef = useRef(null);
+
+  // Close paper dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (paperDropdownRef.current && !paperDropdownRef.current.contains(event.target)) {
+        setIsPaperDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredPaperOptions = STANDARD_PAPER_OPTIONS.filter(opt =>
+    opt.toLowerCase().includes((materialPaper || '').toLowerCase())
+  );
   const [printingType, setPrintingType] = useState(enquiryData?.printing_type || 'Double Side'); // Single Side, Double Side
   const [colorType, setColorType] = useState(enquiryData?.color || 'Color'); // B/W, Color
   const [finishingOptions, setFinishingOptions] = useState(enquiryData?.finishing || ['Lamination (Matte / Gloss)']);
@@ -95,6 +133,84 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
   const [prepressAssignedTo, setPrepressAssignedTo] = useState(enquiryData?.prepress || 'Aruna');
   const [vendorOutsource, setVendorOutsource] = useState(enquiryData?.vendor || '');
   const [remarks, setRemarks] = useState(enquiryData?.remarks || '');
+
+  // Synchronize form fields whenever enquiryData changes or modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (enquiryData) {
+        setEnquiryNo(enquiryData.enquiry_no || enquiryData.id || `ENQ-${Date.now().toString().slice(-6)}`);
+        setEnquiryDate(enquiryData.date || new Date().toISOString().split('T')[0]);
+        setCustomerName(enquiryData.customer_name || '');
+        setPhone(enquiryData.phone?.replace(/\D/g, '').slice(-10) || '');
+        setPhoneError('');
+        setAltPhone(enquiryData.alt_phone?.replace(/\D/g, '').slice(-10) || '');
+        setAltPhoneError('');
+        setCustomerType(enquiryData.customer_type || 'New');
+        setEmail(enquiryData.email || '');
+        setSource(enquiryData.source || 'Walk-in');
+        setOtherSource('');
+        setJobTitle(enquiryData.job_name || enquiryData.job_title || enquiryData.job_specification || '');
+        setJobTypes(enquiryData.job_types || ['Offset Printing']);
+        setOtherJobType(enquiryData.other_job_type || '');
+        setJobBrief(enquiryData.job_brief || '');
+        
+        const standardMatch = STANDARD_SIZES.filter(s => s !== 'Custom / Other').includes(enquiryData.size);
+        setSizeOption(enquiryData.size ? (standardMatch ? enquiryData.size : 'Custom / Other') : 'A4 (210 x 297 mm)');
+        setCustomSize(enquiryData.size && !standardMatch ? enquiryData.size : '');
+        
+        setQuantity(enquiryData.quantity || 1000);
+        setMaterialPaper(enquiryData.paper || '300 GSM Art Card');
+        setPrintingType(enquiryData.printing_type || 'Double Side');
+        setColorType(enquiryData.color || 'Color');
+        setFinishingOptions(enquiryData.finishing || ['Lamination (Matte / Gloss)']);
+        setOtherFinishing(enquiryData.other_finishing || '');
+        setDesignStatus(enquiryData.design_status || 'Ready to Print');
+        setRequiredByDate(enquiryData.required_date || enquiryData.expected_delivery || new Date(Date.now() + 3*24*3600*1000).toISOString().split('T')[0]);
+        setUrgency(enquiryData.urgency || 'Normal');
+        setDeliveryMode(enquiryData.delivery_mode || 'Pickup');
+        setDeliveryAddress(enquiryData.address || '');
+        setQuoteAssignedTo(enquiryData.quote_assigned_to || 'Krishnamani');
+        setCurrentStage(enquiryData.current_stage || 'Order Desk');
+        setPrepressAssignedTo(enquiryData.prepress || 'Aruna');
+        setVendorOutsource(enquiryData.vendor || '');
+        setRemarks(enquiryData.remarks || '');
+      } else {
+        setEnquiryNo(`ENQ-${Date.now().toString().slice(-6)}`);
+        setEnquiryDate(new Date().toISOString().split('T')[0]);
+        setCustomerName('');
+        setPhone('');
+        setPhoneError('');
+        setAltPhone('');
+        setAltPhoneError('');
+        setCustomerType('New');
+        setEmail('');
+        setSource('Walk-in');
+        setOtherSource('');
+        setJobTitle('');
+        setJobTypes(['Offset Printing']);
+        setOtherJobType('');
+        setJobBrief('');
+        setSizeOption('A4 (210 x 297 mm)');
+        setCustomSize('');
+        setQuantity(1000);
+        setMaterialPaper('300 GSM Art Card');
+        setPrintingType('Double Side');
+        setColorType('Color');
+        setFinishingOptions(['Lamination (Matte / Gloss)']);
+        setOtherFinishing('');
+        setDesignStatus('Ready to Print');
+        setRequiredByDate(new Date(Date.now() + 3*24*3600*1000).toISOString().split('T')[0]);
+        setUrgency('Normal');
+        setDeliveryMode('Pickup');
+        setDeliveryAddress('');
+        setQuoteAssignedTo('Krishnamani');
+        setCurrentStage('Order Desk');
+        setPrepressAssignedTo('Aruna');
+        setVendorOutsource('');
+        setRemarks('');
+      }
+    }
+  }, [isOpen, enquiryData]);
 
   // Phone Validation Logic (10 digits mobile number)
   const validatePhoneNumber = (value, isRequired = true) => {
@@ -200,6 +316,8 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
       return t;
     });
 
+    const finalJobTitle = (jobTitle || '').trim() || (jobBrief || '').trim() || (resolvedJobTypes.length > 0 ? resolvedJobTypes.join(', ') : `${quantity} nos ${resolvedSize}`);
+
     if (onSaveEnquiry) {
       onSaveEnquiry({
         enquiry_no: enquiryNo,
@@ -210,10 +328,12 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
         customer_type: customerType,
         email,
         source: source === 'Other' ? otherSource : source,
+        job_name: finalJobTitle,
+        job_title: finalJobTitle,
         job_types: resolvedJobTypes,
         other_job_type: otherJobType,
         job_brief: jobBrief,
-        job_specification: jobBrief || (resolvedJobTypes?.length > 0 ? resolvedJobTypes.join(', ') : `${quantity} nos ${resolvedSize}`),
+        job_specification: finalJobTitle,
         size: resolvedSize,
         quantity,
         paper: materialPaper,
@@ -243,7 +363,7 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
         payment_mode: enquiryData?.payment_mode || 'UPI',
         balance: enquiryData?.balance || 0,
         payment_terms: enquiryData?.payment_terms || 'Advance + Balance',
-        status: 'Enquiry',
+        status: enquiryData?.status || 'Enquiry',
         next_followup: enquiryData?.next_followup || ''
       });
     }
@@ -254,21 +374,15 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Josco Printers — New Enquiry Form (For Quotation)"
+      title={enquiryData ? `Josco Printers — Edit Job / Enquiry (${enquiryData.enquiry_no || enquiryData.id})` : "Josco Printers — New Enquiry Form (For Quotation)"}
       maxWidth="max-w-4xl"
     >
       <div className="printable-enquiry-form-wrapper p-4 bg-white">
-        {/* Printable Action Header */}
-        <div className="no-print flex justify-between items-center mb-4 pb-3 border-b border-slate-200">
-          <span className="badge badge-primary text-xs font-semibold">Master Customer Enquiry Form</span>
-          <div className="flex gap-2">
-            <button type="button" className="btn btn-sm btn-secondary" onClick={handlePrintForm}>
-              <PrinterIcon size={14} /> Print Blank / Filled Form
-            </button>
-            <button type="button" className="btn btn-sm btn-primary" onClick={handleSubmit}>
-              <Save size={14} /> Save Enquiry Record
-            </button>
-          </div>
+        {/* Sub-header badge */}
+        <div className="no-print flex justify-between items-center mb-3 pb-2 border-b border-slate-200">
+          <span className="badge badge-primary text-xs font-semibold">
+            {enquiryData ? 'Edit Master Job Record' : 'Master Customer Enquiry Form'}
+          </span>
         </div>
 
         {/* Physical Form Printable Header */}
@@ -278,7 +392,9 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
             <div className="text-xs font-extrabold tracking-widest text-primary uppercase">PRINTERS</div>
           </div>
           <div className="form-title-section text-center">
-            <h2 className="text-xl font-extrabold text-slate-900 tracking-wide uppercase">NEW ENQUIRY FORM</h2>
+            <h2 className="text-xl font-extrabold text-slate-900 tracking-wide uppercase">
+              {enquiryData ? 'EDIT JOB / ENQUIRY FORM' : 'NEW ENQUIRY FORM'}
+            </h2>
             <div className="text-xs font-bold text-red-600 uppercase tracking-wider">(FOR QUOTATION)</div>
           </div>
           <div className="enquiry-meta-box border border-slate-300 rounded p-2 text-xs text-right min-w-[200px]">
@@ -480,6 +596,19 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
               </div>
               <div className="p-3 space-y-2">
                 <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Job Name / Title <span className="text-red-500">*</span> :
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full border border-slate-300 rounded px-2.5 py-1.5 text-xs font-semibold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 outline-none bg-white"
+                    placeholder="e.g. Annual Report 2026, Wedding Cards, Product Catalog..."
+                    value={jobTitle}
+                    onChange={(e) => setJobTitle(e.target.value)}
+                  />
+                </div>
+                <div>
                   <label className="font-bold text-slate-700 block mb-1">Job Type (Tick All That Apply) :</label>
                   <div className="grid grid-cols-3 gap-1.5 bg-slate-50 p-2 rounded border border-slate-200">
                     {[
@@ -570,13 +699,59 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="w-36 font-bold text-slate-700">Material / Paper :</label>
-                  <input
-                    type="text"
-                    className="flex-1 border-b border-slate-300 focus:border-primary outline-none py-0.5"
-                    placeholder="e.g. 300 GSM, PVC, Cromo, 130 GSM Gloss"
-                    value={materialPaper}
-                    onChange={(e) => setMaterialPaper(e.target.value)}
-                  />
+                  <div className="relative flex-1" ref={paperDropdownRef}>
+                    <div className="flex items-center border-b border-slate-300 focus-within:border-primary">
+                      <input
+                        type="text"
+                        className="w-full bg-transparent outline-none py-0.5 text-xs font-semibold text-slate-800 pr-6"
+                        placeholder="Choose paper or type to search..."
+                        value={materialPaper}
+                        onChange={(e) => {
+                          setMaterialPaper(e.target.value);
+                          setIsPaperDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsPaperDropdownOpen(true)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsPaperDropdownOpen(prev => !prev)}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+                        tabIndex={-1}
+                        title="Choose paper stock from list"
+                      >
+                        <ChevronDown size={14} className={`transition-transform duration-200 ${isPaperDropdownOpen ? 'rotate-180 text-primary' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Searchable Dropdown Menu */}
+                    {isPaperDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-300 rounded-lg shadow-xl z-50 max-h-52 overflow-y-auto py-1 divide-y divide-slate-100">
+                        {filteredPaperOptions.length > 0 ? (
+                          filteredPaperOptions.map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => {
+                                setMaterialPaper(opt);
+                                setIsPaperDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-purple-50 transition flex items-center justify-between cursor-pointer ${
+                                materialPaper === opt ? 'bg-purple-50 text-purple-900 font-bold' : 'text-slate-700 font-medium'
+                              }`}
+                            >
+                              <span>{opt}</span>
+                              {materialPaper === opt && <Check size={12} className="text-purple-600" />}
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-xxs text-slate-500 italic flex flex-col gap-0.5">
+                            <span>No standard paper matching &ldquo;{materialPaper}&rdquo;</span>
+                            <span className="text-purple-700 font-semibold not-italic">Using custom paper: &ldquo;{materialPaper}&rdquo;</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 py-1">
                   <div className="flex items-center gap-3">
@@ -820,6 +995,7 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
                     value={prepressAssignedTo}
                     onChange={(e) => setPrepressAssignedTo(e.target.value)}
                   >
+                    <option value="Kiran Verma">Kiran Verma</option>
                     <option value="Aruna">Aruna</option>
                     <option value="Karthik">Karthik</option>
                     <option value="Girish">Girish</option>
@@ -853,6 +1029,33 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
                   onChange={(e) => setRemarks(e.target.value)}
                 ></textarea>
               </div>
+            </div>
+          </div>
+
+          {/* Bottom Form Action Buttons */}
+          <div className="no-print flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 mt-4 border-t border-slate-200 bg-slate-50 p-3 rounded-xl shadow-2xs">
+            <span className="text-xs text-slate-500 font-medium">
+              {enquiryData
+                ? 'Review job details above and save to update this job enquiry.'
+                : 'Review all sections above and save to register this enquiry in Commercial Desk.'}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary flex items-center gap-1.5 px-3 py-1.5 cursor-pointer font-semibold shadow-2xs hover:shadow-xs"
+                onClick={handlePrintForm}
+              >
+                <PrinterIcon size={14} />
+                <span>Print Blank / Filled Form</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary flex items-center gap-1.5 px-4 py-1.5 bg-[#002b41] hover:bg-slate-800 text-white font-bold rounded-lg cursor-pointer shadow-2xs hover:shadow-xs"
+                onClick={handleSubmit}
+              >
+                <Save size={14} />
+                <span>{enquiryData ? 'Update Job Record' : 'Save Enquiry Record'}</span>
+              </button>
             </div>
           </div>
         </form>
