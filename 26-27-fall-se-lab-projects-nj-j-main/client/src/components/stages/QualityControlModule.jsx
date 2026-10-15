@@ -25,6 +25,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { RushBadge } from '../common/RushBadge';
 
 export const QualityControlModule = () => {
   const {
@@ -41,7 +42,8 @@ export const QualityControlModule = () => {
     setActiveTab,
     activeSubTab,
     setActiveSubTab,
-    activeUser
+    activeUser,
+    resolveJobRushStatus
   } = useApp();
 
   const finishingJobs = jobOrders.filter(j => j.current_stage === 'FinishingQC' || j.current_stage === 'QC & Packaging');
@@ -309,7 +311,7 @@ export const QualityControlModule = () => {
                     </div>
                   ) : (
                     finishingJobs.map(job => {
-                      const isUrgent = job.priority === 'Urgent' || job.is_rush_order;
+                      const isUrgent = resolveJobRushStatus(job);
                       const hasFlag = job.qc_flagged || issues.some(i => i.job_ticket_number === job.job_ticket_number && !i.resolved);
                       const activeJobIssue = issues.find(i => i.job_ticket_number === job.job_ticket_number && !i.resolved);
 
@@ -320,11 +322,7 @@ export const QualityControlModule = () => {
                               <span className="px-2 py-0.5 rounded font-mono font-bold text-xs bg-slate-100 text-slate-900 border border-slate-200">
                                 {job.job_ticket_number}
                               </span>
-                              {isUrgent && (
-                                <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-rose-50 text-rose-700 border border-rose-200 animate-pulse">
-                                  RUSH
-                                </span>
-                              )}
+                              {isUrgent && <RushBadge size="xs" />}
                               {hasFlag && (
                                 <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-rose-600 text-white flex items-center gap-1 shadow-2xs">
                                   <Flag size={11} /> QC FLAGGED

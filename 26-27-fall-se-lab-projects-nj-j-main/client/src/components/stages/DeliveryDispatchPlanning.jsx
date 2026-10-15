@@ -13,10 +13,19 @@ import {
   ShieldCheck,
   User,
   Package,
-  Flag
+  Flag,
+  Search,
+  Filter,
+  AlertTriangle,
+  IndianRupee,
+  Layers,
+  X,
+  Calendar,
+  Compass
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { TripSheetModal } from '../common/TripSheetModal';
+import { RushBadge } from '../common/RushBadge';
 
 export const DeliveryDispatchPlanning = () => {
   const {
@@ -28,20 +37,38 @@ export const DeliveryDispatchPlanning = () => {
     createTripSheet,
     jobOrders,
     openQCFlagModal,
-    issues
+    issues,
+    resolveJobRushStatus
   } = useApp();
 
-  const [selectedRouteId, setSelectedRouteId] = useState('route-1');
+  // Search, Filters & View Mode
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedAreaFilter, setSelectedAreaFilter] = useState('ALL');
+  const [rushOnlyFilter, setRushOnlyFilter] = useState(false);
+  const [viewMode, setViewMode] = useState('pending'); // 'pending' | 'dispatched'
+
+  // Allocation & Trip Sheet form state
   const [selectedJobIds, setSelectedJobIds] = useState([]);
-  const [selectedDriver, setSelectedDriver] = useState('Ramesh');
-  const [selectedVehicle, setSelectedVehicle] = useState('KA 03 AB 1234');
+  const [tripRunName, setTripRunName] = useState('Morning Delivery Run #1');
+  const [selectedVehicle, setSelectedVehicle] = useState(vehicles?.[0]?.reg_no || 'KA 03 AB 1234');
+  const [selectedDriver, setSelectedDriver] = useState(vehicles?.[0]?.driver_name || 'Ramesh');
   const [tripDate, setTripDate] = useState('2026-06-19');
+
+  // Modal State
   const [isTripModalOpen, setIsTripModalOpen] = useState(false);
   const [createdTrip, setCreatedTrip] = useState(null);
   const [createdTripJobs, setCreatedTripJobs] = useState([]);
-  const [viewMode, setViewMode] = useState('pending'); // 'pending' | 'dispatched'
 
-  const selectedRoute = dispatchRoutes.find(r => r.id === selectedRouteId) || dispatchRoutes[0];
+  // Helper to determine destination area name from route data or job properties
+  const getAreaName = (job) => {
+    if (job.area) return job.area;
+    if (job.destination_area) return job.destination_area;
+    const route = dispatchRoutes?.find(r => r.id === job.route_id);
+    if (route) {
+      return route.name.replace(/^Route\s*\d+\s*[-–:]\s*/i, '').trim();
+    }
+    return 'Bengaluru Central';
+  };
 
   const isJobOnTrip = (job) => {
     return Boolean(
@@ -53,10 +80,61 @@ export const DeliveryDispatchPlanning = () => {
     );
   };
 
-  const pendingJobs = routeJobs.filter(j => j.route_id === selectedRouteId && !isJobOnTrip(j));
-  const dispatchedJobs = routeJobs.filter(j => j.route_id === selectedRouteId && isJobOnTrip(j));
-  const filteredJobs = viewMode === 'pending' ? pendingJobs : dispatchedJobs;
+  // Master queues across the entire plant (no route silos)
+  const allPendingJobs = (routeJobs || []).filter(j => !isJobOnTrip(j));
+  const allDispatchedJobs = (routeJobs || []).filter(j => isJobOnTrip(j));
 
+  // Available unique areas for dropdown filter
+  const availableAreas = Array.from(
+    new Set((routeJobs || []).map(j => getAreaName(j)).filter(Boolean))
+  ).sort();
+
+  // KPI calculations
+  const totalPendingUnits = allPendingJobs.reduce((acc, curr) => acc + (curr.balance || curr.route_qty || 0), 0);
+  const totalCodPending = allPendingJobs.reduce((acc, curr) => acc + (curr.cod_amount || 0), 0);
+  const rushPendingJobs = allPendingJobs.filter(job => {
+    const matchedJob = jobOrders?.find(j => j.job_ticket_number === job.job_no);
+    return resolveJobRushStatus(matchedJob || job);
+  });
+  const inTransitTripsCount = (tripSheets || []).length;
+  const activeVehiclesOnRoad = vehicles?.filter(v => v.status === 'On Trip')?.length || (allDispatchedJobs.length > 0 ? 1 : 0);
+
+  // Filter pending jobs by search, area, and rush
+  const filteredPendingJobs = allPendingJobs.filter(job => {
+    const area = getAreaName(job);
+    const matchesSearch = !searchTerm ||
+      job.job_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.customer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.product?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      area.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesArea = selectedAreaFilter === 'ALL' || area === selectedAreaFilter;
+
+    const matchedJob = jobOrders?.find(j => j.job_ticket_number === job.job_no);
+    const isRush = resolveJobRushStatus(matchedJob || job);
+    const matchesRush = !rushOnlyFilter || isRush;
+
+    return matchesSearch && matchesArea && matchesRush;
+  });
+
+  // Filter dispatched jobs by search and area
+  const filteredDispatchedJobs = allDispatchedJobs.filter(job => {
+    const area = getAreaName(job);
+    const matchesSearch = !searchTerm ||
+      job.job_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.customer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.product?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.trip_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      area.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesArea = selectedAreaFilter === 'ALL' || area === selectedAreaFilter;
+
+    return matchesSearch && matchesArea;
+  });
+
+  const displayedJobs = viewMode === 'pending' ? filteredPendingJobs : filteredDispatchedJobs;
+
+  // Selection handlers
   const toggleSelectJob = (jobNo) => {
     if (viewMode !== 'pending') return;
     setSelectedJobIds(prev =>
@@ -64,18 +142,44 @@ export const DeliveryDispatchPlanning = () => {
     );
   };
 
-  const selectAllJobs = () => {
+  const areAllDisplayedSelected = displayedJobs.length > 0 &&
+    displayedJobs.every(j => selectedJobIds.includes(j.job_no));
+
+  const toggleSelectAll = () => {
     if (viewMode !== 'pending') return;
-    if (selectedJobIds.length === pendingJobs.length && pendingJobs.length > 0) {
-      setSelectedJobIds([]);
+    if (areAllDisplayedSelected) {
+      const displayedNos = new Set(displayedJobs.map(j => j.job_no));
+      setSelectedJobIds(prev => prev.filter(id => !displayedNos.has(id)));
     } else {
-      setSelectedJobIds(pendingJobs.map(j => j.job_no));
+      const displayedNos = displayedJobs.map(j => j.job_no);
+      setSelectedJobIds(prev => Array.from(new Set([...prev, ...displayedNos])));
     }
   };
 
-  const selectedJobsList = pendingJobs.filter(j => selectedJobIds.includes(j.job_no));
-  const selectedQty = selectedJobsList.reduce((acc, curr) => acc + (curr.balance || curr.route_qty), 0);
-  const totalCodAmount = selectedJobsList.reduce((acc, curr) => acc + curr.cod_amount, 0);
+  // Selected Jobs calculations for allocation panel
+  const selectedJobsList = allPendingJobs.filter(j => selectedJobIds.includes(j.job_no));
+  const selectedQty = selectedJobsList.reduce((acc, curr) => acc + (curr.balance || curr.route_qty || 0), 0);
+  const totalCodAmount = selectedJobsList.reduce((acc, curr) => acc + (curr.cod_amount || 0), 0);
+
+  // Group selected destinations
+  const selectedDestinationBreakdown = selectedJobsList.reduce((acc, job) => {
+    const area = getAreaName(job);
+    acc[area] = (acc[area] || 0) + 1;
+    return acc;
+  }, {});
+
+  const selectedVehicleObj = vehicles?.find(v => v.reg_no === selectedVehicle) || vehicles?.[0];
+  const estimatedBoxes = Math.ceil(selectedQty / 250);
+  const vehicleCapacityBoxes = selectedVehicleObj?.capacity_boxes || 60;
+  const capacityPercent = Math.min(100, Math.round((estimatedBoxes / vehicleCapacityBoxes) * 100));
+
+  const handleVehicleChange = (regNo) => {
+    setSelectedVehicle(regNo);
+    const matched = vehicles?.find(v => v.reg_no === regNo);
+    if (matched?.driver_name) {
+      setSelectedDriver(matched.driver_name);
+    }
+  };
 
   const handleCreateTripSheet = () => {
     if (selectedJobIds.length === 0) {
@@ -83,13 +187,16 @@ export const DeliveryDispatchPlanning = () => {
       return;
     }
 
-    const currentSelectedJobs = pendingJobs.filter(j => selectedJobIds.includes(j.job_no));
+    const currentSelectedJobs = allPendingJobs.filter(j => selectedJobIds.includes(j.job_no));
 
     const trip = createTripSheet({
-      route_id: selectedRoute.id,
-      route_name: selectedRoute.name,
+      trip_run_name: tripRunName.trim() || 'Standard Delivery Run',
+      route_name: tripRunName.trim() || 'Standard Delivery Run',
+      route_id: 'unified',
       driver_name: selectedDriver,
+      driver_phone: selectedVehicleObj?.driver_phone || '+91 98450 99881',
       vehicle_reg: selectedVehicle,
+      vehicle_type: selectedVehicleObj?.vehicle_type || 'Commercial Van',
       trip_date: tripDate,
       selected_job_ids: selectedJobIds,
       total_qty: selectedQty,
@@ -118,87 +225,119 @@ export const DeliveryDispatchPlanning = () => {
 
   return (
     <div className="p-4 max-w-[1600px] mx-auto space-y-4 text-xs select-none">
-      {/* Top Header matching Page 9 */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Truck size={20} className="text-[#002b41]" />
-            <h1 className="text-base font-bold text-slate-900 tracking-tight">Delivery Workspace • Dispatch Planning</h1>
+      {/* Top Plant-Wide KPI Summary Metric Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Card 1: Pending Deliveries */}
+        <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-xs flex items-center gap-3">
+          <div className="p-2.5 bg-blue-50 text-blue-700 rounded-lg">
+            <Package size={20} />
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">
-            Group route-wise job quantities and assign selected jobs to one vehicle
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setSelectedJobIds([])}
-          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer text-xs self-start sm:self-auto"
-          title="Refresh dispatch queue and reset selection"
-        >
-          <RefreshCw size={13} />
-          <span>Refresh</span>
-        </button>
-      </div>
-
-      {/* Route Wise Dispatch Queue (Page 9 top cards) */}
-      <div>
-        <div className="text-[10px] font-mono font-bold uppercase text-slate-400 mb-2">
-          Route Wise Dispatch Queue
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {dispatchRoutes.map(route => {
-            const isSelected = selectedRouteId === route.id;
-            const rPendingJobs = routeJobs.filter(j => j.route_id === route.id && !isJobOnTrip(j));
-            const jobsCount = rPendingJobs.length;
-            const totalQty = rPendingJobs.reduce((acc, j) => acc + (j.balance || j.route_qty), 0);
-            const totalAmount = rPendingJobs.reduce((acc, j) => acc + j.cod_amount, 0);
-            return (
-              <div
-                key={route.id}
-                onClick={() => {
-                  setSelectedRouteId(route.id);
-                  setSelectedJobIds([]);
-                }}
-                className={`bg-white rounded-xl p-3 border cursor-pointer transition shadow-xs ${
-                  isSelected ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/10' : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs mb-2 truncate">
-                  <MapPin size={13} className={isSelected ? 'text-blue-600' : 'text-slate-400'} />
-                  <span className="truncate">{route.name}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-1 text-[11px] font-mono text-center border-t border-slate-100 pt-2">
-                  <div>
-                    <div className="text-slate-400 text-[10px]">Jobs</div>
-                    <div className="font-extrabold text-slate-900">{jobsCount}</div>
-                  </div>
-                  <div>
-                    <div className="text-slate-400 text-[10px]">Qty</div>
-                    <div className="font-extrabold text-slate-900">{totalQty.toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-slate-400 text-[10px]">Amt (₹)</div>
-                    <div className="font-extrabold text-slate-900">{(totalAmount / 1000).toFixed(1)}k</div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main Split: Selected Route Table (Left) + Vehicle Assignment (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left: Selected Route Table */}
-        <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">Selected Route</span>
-              <h2 className="text-sm font-bold text-slate-900">{selectedRoute.name}</h2>
+          <div>
+            <div className="text-[10px] uppercase font-mono font-bold text-slate-400">
+              Pending Deliveries
             </div>
+            <div className="text-lg font-black text-slate-900 tracking-tight">
+              {allPendingJobs.length} <span className="text-xs font-normal text-slate-500">Orders</span>
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">
+              {totalPendingUnits.toLocaleString()} units ready in plant
+            </div>
+          </div>
+        </div>
 
-            <div className="flex items-center gap-2">
+        {/* Card 2: Rush Priority Orders */}
+        <div
+          onClick={() => {
+            setViewMode('pending');
+            setRushOnlyFilter(prev => !prev);
+          }}
+          className={`bg-white rounded-xl p-3.5 border shadow-xs flex items-center gap-3 cursor-pointer transition ${
+            rushOnlyFilter ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/20' : 'border-slate-200 hover:border-amber-300'
+          }`}
+          title="Click to toggle filter for rush priority orders only"
+        >
+          <div className="p-2.5 bg-amber-50 text-amber-700 rounded-lg">
+            <AlertTriangle size={20} />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase font-mono font-bold text-amber-600 flex items-center gap-1">
+              <span>Rush Priority Orders</span>
+              {rushOnlyFilter && <span className="text-[9px] bg-amber-200 px-1 rounded font-bold">ACTIVE</span>}
+            </div>
+            <div className="text-lg font-black text-amber-800 tracking-tight">
+              {rushPendingJobs.length} <span className="text-xs font-normal text-slate-500">Fast-Track</span>
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">
+              High priority dispatch required
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Vehicles On Road / In-Transit */}
+        <div
+          onClick={() => setViewMode('dispatched')}
+          className="bg-white rounded-xl p-3.5 border border-slate-200 hover:border-slate-300 shadow-xs flex items-center gap-3 cursor-pointer transition"
+          title="Click to view dispatched trip manifests"
+        >
+          <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-lg">
+            <Truck size={20} />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase font-mono font-bold text-slate-400">
+              On Road / In-Transit
+            </div>
+            <div className="text-lg font-black text-slate-900 tracking-tight">
+              {inTransitTripsCount} <span className="text-xs font-normal text-slate-500">Trips</span>
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">
+              {allDispatchedJobs.length} jobs assigned • {activeVehiclesOnRoad} vehicles out
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Total COD to Collect */}
+        <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-xs flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-50 text-indigo-700 rounded-lg">
+            <IndianRupee size={20} />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase font-mono font-bold text-slate-400">
+              Total COD to Collect
+            </div>
+            <div className="text-lg font-black text-slate-900 tracking-tight">
+              ₹ {totalCodPending.toLocaleString()}
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">
+              Across all pending ready orders
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Split: Unified Orders Queue (Left 8 Cols) + Universal Vehicle Allocation (Right 4 Cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left: Master Dispatch Table */}
+        <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          {/* Header Controls & Filter Bar */}
+          <div className="p-3 bg-slate-50 border-b border-slate-200 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">
+                  Plant Queue
+                </span>
+                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                  <span>
+                    {viewMode === 'pending'
+                      ? 'Consolidated Dispatch Queue'
+                      : 'Dispatched Orders & Active Trips'}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500 font-normal">
+                    ({displayedJobs.length} {displayedJobs.length === 1 ? 'order' : 'orders'})
+                  </span>
+                </h2>
+              </div>
+
+              {/* View Mode Toggle */}
               <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-200 text-[11px] font-mono">
                 <button
                   type="button"
@@ -209,11 +348,15 @@ export const DeliveryDispatchPlanning = () => {
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <span>Pending Queue</span>
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                    pendingJobs.length > 0 ? 'bg-amber-100 text-amber-800 font-bold' : 'bg-slate-200 text-slate-600'
-                  }`}>
-                    {pendingJobs.length}
+                  <span>Pending Ready</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      allPendingJobs.length > 0
+                        ? 'bg-amber-100 text-amber-800 font-bold'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {allPendingJobs.length}
                   </span>
                 </button>
                 <button
@@ -227,16 +370,105 @@ export const DeliveryDispatchPlanning = () => {
                 >
                   <Truck size={12} className="text-blue-600" />
                   <span>On Trip / Dispatched</span>
-                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                    dispatchedJobs.length > 0 ? 'bg-blue-100 text-blue-800 font-bold' : 'bg-slate-200 text-slate-600'
-                  }`}>
-                    {dispatchedJobs.length}
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                      allDispatchedJobs.length > 0
+                        ? 'bg-blue-100 text-blue-800 font-bold'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {allDispatchedJobs.length}
                   </span>
                 </button>
               </div>
             </div>
+
+            {/* Search and Secondary Filter Row */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search Job No, Customer, Product, Area..."
+                  className="w-full pl-8 pr-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:border-blue-500 font-medium"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Area Selector Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <MapPin size={13} className="text-slate-400" />
+                <select
+                  value={selectedAreaFilter}
+                  onChange={(e) => setSelectedAreaFilter(e.target.value)}
+                  className="h-8 px-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="ALL">All Destination Areas</option>
+                  {availableAreas.map(area => (
+                    <option key={area} value={area}>
+                      {area}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Rush Toggle Pill (in pending mode) */}
+              {viewMode === 'pending' && (
+                <button
+                  type="button"
+                  onClick={() => setRushOnlyFilter(prev => !prev)}
+                  className={`h-8 px-2.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    rushOnlyFilter
+                      ? 'bg-amber-500 text-white border-amber-600 shadow-2xs'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <AlertTriangle size={12} className={rushOnlyFilter ? 'text-white' : 'text-amber-500'} />
+                  <span>Rush Only</span>
+                  {rushPendingJobs.length > 0 && (
+                    <span
+                      className={`px-1 rounded text-[10px] font-mono ${
+                        rushOnlyFilter ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {rushPendingJobs.length}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* Reset Filter Button */}
+              {(searchTerm || selectedAreaFilter !== 'ALL' || rushOnlyFilter || selectedJobIds.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedAreaFilter('ALL');
+                    setRushOnlyFilter(false);
+                    setSelectedJobIds([]);
+                  }}
+                  className="h-8 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer ml-auto"
+                  title="Reset filters and selection"
+                >
+                  <RefreshCw size={11} />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
           </div>
 
+          {/* Table */}
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -245,20 +477,21 @@ export const DeliveryDispatchPlanning = () => {
                     {viewMode === 'pending' ? (
                       <input
                         type="checkbox"
-                        checked={selectedJobIds.length === pendingJobs.length && pendingJobs.length > 0}
-                        onChange={selectAllJobs}
+                        checked={areAllDisplayedSelected}
+                        onChange={toggleSelectAll}
                         className="rounded border-slate-300 text-blue-600 focus:ring-0 cursor-pointer"
+                        title="Select/Deselect all visible jobs"
                       />
                     ) : (
                       <span className="text-[10px] text-slate-400">#</span>
                     )}
                   </th>
-                  <th className="p-2.5 w-24">Job No</th>
-                  <th className="p-2.5 w-36">Customer</th>
-                  <th className="p-2.5 w-28">Product</th>
-                  <th className="p-2.5 text-right w-20">Route Qty</th>
+                  <th className="p-2.5 w-28">Job Ticket</th>
+                  <th className="p-2.5 w-40">Customer</th>
+                  <th className="p-2.5 w-32">Product</th>
+                  <th className="p-2.5 w-32">Destination Area</th>
+                  <th className="p-2.5 text-right w-20">Ready Qty</th>
                   <th className="p-2.5 text-right w-20">Dispatched</th>
-                  <th className="p-2.5 text-right w-20">Balance</th>
                   <th className="p-2.5 text-right w-24">COD (₹)</th>
                   <th className="p-2.5 text-center w-20">ACK</th>
                   <th className="p-2.5 text-center w-28">
@@ -267,45 +500,63 @@ export const DeliveryDispatchPlanning = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {filteredJobs.length === 0 ? (
+                {displayedJobs.length === 0 ? (
                   <tr>
                     <td colSpan={10} className="p-8 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center max-w-md mx-auto space-y-2">
                         <CheckCircle2 size={32} className="text-emerald-500" />
                         <span className="font-bold text-slate-800 text-sm">
                           {viewMode === 'pending'
-                            ? `All Jobs for ${selectedRoute.name} Dispatched`
-                            : 'No Jobs Currently on Trip Sheets'}
+                            ? 'No Pending Jobs Matching Criteria'
+                            : 'No Dispatched Jobs Matching Criteria'}
                         </span>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[11px] text-slate-500 text-center">
                           {viewMode === 'pending'
-                            ? `There are no pending jobs awaiting delivery on ${selectedRoute.name}. All jobs have been assigned to trip sheets and dispatched.`
-                            : 'When you create a trip sheet, assigned jobs will be archived here.'}
+                            ? (searchTerm || selectedAreaFilter !== 'ALL' || rushOnlyFilter)
+                              ? 'No pending orders match your active search or destination filters. Try clearing filters to see all available jobs.'
+                              : 'All completed production print jobs have been dispatched into vehicle trip sheets.'
+                            : 'No trip sheets currently match your filter criteria.'}
                         </p>
-                        {viewMode === 'pending' && dispatchedJobs.length > 0 && (
+                        {(searchTerm || selectedAreaFilter !== 'ALL' || rushOnlyFilter) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSearchTerm('');
+                              setSelectedAreaFilter('ALL');
+                              setRushOnlyFilter(false);
+                            }}
+                            className="mt-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition border border-slate-300 cursor-pointer"
+                          >
+                            Clear All Filters
+                          </button>
+                        )}
+                        {viewMode === 'pending' && allPendingJobs.length === 0 && allDispatchedJobs.length > 0 && (
                           <button
                             type="button"
                             onClick={() => setViewMode('dispatched')}
-                            className="mt-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition border border-slate-300 cursor-pointer inline-flex items-center gap-1.5"
+                            className="mt-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-xs transition border border-blue-200 cursor-pointer inline-flex items-center gap-1.5"
                           >
-                            <Truck size={13} className="text-blue-600" />
-                            <span>View {dispatchedJobs.length} Dispatched Jobs on Trip Sheets</span>
+                            <Truck size={13} />
+                            <span>View {allDispatchedJobs.length} Dispatched Jobs on Active Trips</span>
                           </button>
                         )}
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  filteredJobs.map((job, idx) => {
+                  displayedJobs.map((job, idx) => {
                     const isChecked = selectedJobIds.includes(job.job_no);
                     const isFlagged = job.qc_flagged || issues?.some(i => (i.job_ticket_number === job.job_no || i.job_order_id === job.id) && !i.resolved);
+                    const matchedJob = jobOrders?.find(j => j.job_ticket_number === job.job_no);
+                    const isRush = resolveJobRushStatus(matchedJob || job);
+                    const areaName = getAreaName(job);
 
                     return (
                       <tr
                         key={job.id}
                         onClick={() => toggleSelectJob(job.job_no)}
                         className={`hover:bg-slate-50/80 cursor-pointer transition ${
-                          isChecked ? 'bg-blue-50/30' : ''
+                          isChecked ? 'bg-blue-50/40 ring-1 ring-blue-500/10' : ''
                         }`}
                       >
                         <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
@@ -321,8 +572,9 @@ export const DeliveryDispatchPlanning = () => {
                           )}
                         </td>
                         <td className="p-2.5 font-mono font-bold text-slate-900">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span>{job.job_no}</span>
+                            {isRush && <RushBadge size="xs" />}
                             {job.trip_number && (
                               <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[8px] bg-blue-100 text-blue-800 border border-blue-200">
                                 {job.trip_number}
@@ -341,11 +593,22 @@ export const DeliveryDispatchPlanning = () => {
                           </div>
                         </td>
                         <td className="p-2.5 font-semibold text-slate-800">{job.customer}</td>
-                        <td className="p-2.5 text-slate-600">{job.product}</td>
-                        <td className="p-2.5 text-right font-mono">{job.route_qty.toLocaleString()}</td>
-                        <td className="p-2.5 text-right font-mono text-slate-500">{job.dispatched.toLocaleString()}</td>
-                        <td className="p-2.5 text-right font-mono font-bold text-amber-700">{job.balance.toLocaleString()}</td>
-                        <td className="p-2.5 text-right font-mono font-bold text-slate-900">₹ {job.cod_amount.toLocaleString()}</td>
+                        <td className="p-2.5 text-slate-600 truncate max-w-[150px]">{job.product}</td>
+                        <td className="p-2.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                            <MapPin size={10} className="text-slate-400" />
+                            <span>{areaName}</span>
+                          </span>
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-bold text-slate-900">
+                          {(job.balance || job.route_qty).toLocaleString()}
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-slate-500">
+                          {(job.dispatched || 0).toLocaleString()}
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-bold text-slate-900">
+                          ₹ {(job.cod_amount || 0).toLocaleString()}
+                        </td>
                         <td className="p-2.5 text-center">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold ${
@@ -356,7 +619,7 @@ export const DeliveryDispatchPlanning = () => {
                                 : 'bg-slate-100 text-slate-600 border border-slate-200'
                             }`}
                           >
-                            {job.ack_status}
+                            {job.ack_status || 'Pending'}
                           </span>
                         </td>
                         <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
@@ -364,7 +627,7 @@ export const DeliveryDispatchPlanning = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                const matchedJob = jobOrders.find(j => j.job_ticket_number === job.job_no);
+                                const matchedJob = jobOrders?.find(j => j.job_ticket_number === job.job_no);
                                 openQCFlagModal(matchedJob || {
                                   id: job.id,
                                   job_ticket_number: job.job_no,
@@ -380,7 +643,7 @@ export const DeliveryDispatchPlanning = () => {
                               <span>QC Flag</span>
                             </button>
                           ) : (
-                            <div className="flex items-center justify-center gap-1">
+                            <div className="flex items-center justify-center gap-1.5">
                               {job.trip_number && (
                                 <button
                                   type="button"
@@ -393,7 +656,7 @@ export const DeliveryDispatchPlanning = () => {
                                     }
                                   }}
                                   className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[10px] font-mono font-bold transition cursor-pointer"
-                                  title="View Trip Sheet modal"
+                                  title="View Trip Sheet manifest"
                                 >
                                   {job.trip_number}
                                 </button>
@@ -417,94 +680,167 @@ export const DeliveryDispatchPlanning = () => {
             </table>
           </div>
 
-          {/* Table Footer matching Page 9 */}
-          <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+          {/* Table Footer */}
+          <div className="p-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 font-mono">
+            <div>
+              <span>
+                {viewMode === 'pending' ? 'Ready for Dispatch' : 'Dispatched / In-Transit'}:{' '}
+                <b className="text-slate-900">{displayedJobs.length}</b> orders
+              </span>
+              {selectedJobIds.length > 0 && viewMode === 'pending' && (
+                <span className="ml-2 font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  {selectedJobIds.length} selected for allocation
+                </span>
+              )}
+            </div>
             <span>
-              {viewMode === 'pending' ? 'Pending Jobs' : 'Dispatched Jobs'}: <b>{filteredJobs.length}</b>
+              Showing {displayedJobs.length} of{' '}
+              {viewMode === 'pending' ? allPendingJobs.length : allDispatchedJobs.length} total orders
             </span>
-            <span>1 - {filteredJobs.length} of {filteredJobs.length} items</span>
           </div>
         </div>
 
-        {/* Right: Vehicle Assignment Pane (Page 9 right card) */}
+        {/* Right: Universal Vehicle Allocation & Manifest Generator */}
         <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col justify-between space-y-4">
           <div className="space-y-3.5">
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h3 className="font-bold text-xs uppercase tracking-tight text-slate-900 flex items-center gap-1.5">
                 <Truck size={15} className="text-amber-500" />
-                <span>Vehicle Assignment</span>
+                <span>Vehicle Allocation & Trip Generator</span>
               </h3>
-              <span className="text-[10px] font-mono text-slate-400">Step 2 of 2</span>
+              <span className="text-[10px] font-mono text-slate-400">Universal Manifest</span>
             </div>
 
-            {/* Driver Select */}
+            {/* Trip Run Name */}
             <div className="space-y-1">
-              <label className="text-slate-600 font-medium block">Driver</label>
-              <select
-                value={selectedDriver}
-                onChange={(e) => setSelectedDriver(e.target.value)}
+              <label className="text-slate-600 font-medium block">Trip / Run Name</label>
+              <input
+                type="text"
+                value={tripRunName}
+                onChange={(e) => setTripRunName(e.target.value)}
+                placeholder="e.g. Morning Delivery Run #1"
                 className="w-full h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
-              >
-                <option value="Ramesh">Ramesh (Primary Fleet)</option>
-                <option value="Suresh Kumar">Suresh Kumar (Heavy Van)</option>
-                <option value="Manjunath">Manjunath (Electric Loader)</option>
-              </select>
+              />
             </div>
 
             {/* Vehicle Select */}
             <div className="space-y-1">
-              <label className="text-slate-600 font-medium block">Vehicle</label>
+              <div className="flex items-center justify-between">
+                <label className="text-slate-600 font-medium block">Vehicle</label>
+                <span className="text-[10px] font-mono text-slate-400">
+                  Cap: {vehicleCapacityBoxes} Boxes
+                </span>
+              </div>
               <select
                 value={selectedVehicle}
-                onChange={(e) => setSelectedVehicle(e.target.value)}
-                className="w-full h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                onChange={(e) => handleVehicleChange(e.target.value)}
+                className="w-full h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:border-blue-500 cursor-pointer"
               >
-                {vehicles.map(v => (
+                {vehicles?.map(v => (
                   <option key={v.id} value={v.reg_no}>
-                    {v.reg_no} — {v.vehicle_type}
+                    {v.reg_no} — {v.vehicle_type} ({v.status})
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Trip Date */}
+            {/* Driver Select */}
             <div className="space-y-1">
-              <label className="text-slate-600 font-medium block">Trip Date</label>
-              <input
-                type="date"
-                value={tripDate}
-                onChange={(e) => setTripDate(e.target.value)}
-                className="w-full h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:border-blue-500"
-              />
+              <label className="text-slate-600 font-medium block">Assigned Driver</label>
+              <select
+                value={selectedDriver}
+                onChange={(e) => setSelectedDriver(e.target.value)}
+                className="w-full h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="Ramesh">Ramesh (Primary Fleet Driver)</option>
+                <option value="Suresh Kumar">Suresh Kumar (Heavy Van Driver)</option>
+                <option value="Manjunath">Manjunath (Electric Loader Driver)</option>
+                <option value="Anand">Anand (Industrial Delivery Specialist)</option>
+              </select>
             </div>
 
-            {/* Summary Counters */}
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 font-mono">
+            {/* Trip Date */}
+            <div className="space-y-1">
+              <label className="text-slate-600 font-medium block">Scheduled Dispatch Date</label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={tripDate}
+                  onChange={(e) => setTripDate(e.target.value)}
+                  className="w-full h-8 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Selected Destinations Breakdown */}
+            {selectedJobIds.length > 0 && Object.keys(selectedDestinationBreakdown).length > 0 && (
+              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5">
+                <div className="text-[10px] text-slate-500 uppercase font-mono font-bold flex items-center justify-between">
+                  <span>Destinations Included</span>
+                  <span className="text-slate-400 font-normal">
+                    {Object.keys(selectedDestinationBreakdown).length} areas
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {Object.entries(selectedDestinationBreakdown).map(([area, count]) => (
+                    <span
+                      key={area}
+                      className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white border border-slate-200 text-slate-800 flex items-center gap-1 shadow-2xs"
+                    >
+                      <MapPin size={9} className="text-blue-600" />
+                      <span>{area}</span>
+                      <span className="font-mono text-slate-400">({count})</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Capacity Bar */}
+            {selectedJobIds.length > 0 && (
+              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between text-[10px] font-mono">
+                  <span className="text-slate-500 font-semibold">Estimated Vehicle Load</span>
+                  <span className={`font-bold ${capacityPercent > 90 ? 'text-rose-600' : 'text-blue-700'}`}>
+                    ~{estimatedBoxes} / {vehicleCapacityBoxes} Boxes ({capacityPercent}%)
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      capacityPercent > 90 ? 'bg-rose-500' : 'bg-blue-600'
+                    }`}
+                    style={{ width: `${Math.min(capacityPercent, 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Live Counters */}
+            <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
               <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="text-[10px] text-slate-400 uppercase font-bold">Selected Jobs</div>
+                <div className="text-[10px] text-slate-400 uppercase font-bold">Selected Orders</div>
                 <div className="text-base font-extrabold text-slate-900">{selectedJobIds.length}</div>
               </div>
 
               <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="text-[10px] text-slate-400 uppercase font-bold">Selected Qty</div>
+                <div className="text-[10px] text-slate-400 uppercase font-bold">Selected Units</div>
                 <div className="text-base font-extrabold text-blue-700">{selectedQty.toLocaleString()}</div>
               </div>
 
               <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="text-[10px] text-slate-400 uppercase font-bold">Pending Route Jobs</div>
-                <div className="text-base font-extrabold text-slate-700">{pendingJobs.length}</div>
+                <div className="text-[10px] text-slate-400 uppercase font-bold">Plant Pending</div>
+                <div className="text-base font-extrabold text-slate-700">{allPendingJobs.length}</div>
               </div>
 
               <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200">
-                <div className="text-[10px] text-amber-700 uppercase font-bold">COD Amount</div>
+                <div className="text-[10px] text-amber-700 uppercase font-bold">Trip COD Total</div>
                 <div className="text-base font-extrabold text-amber-800">₹ {totalCodAmount.toLocaleString()}</div>
               </div>
             </div>
-
-
           </div>
 
-          {/* Primary Create Trip Sheet CTA matching Page 9 */}
+          {/* Primary Create Trip Sheet CTA */}
           <div className="space-y-1.5 pt-2 border-t border-slate-100">
             <button
               onClick={handleCreateTripSheet}
@@ -519,7 +855,7 @@ export const DeliveryDispatchPlanning = () => {
               </span>
             </button>
             <p className="text-[10px] text-slate-400 text-center font-medium leading-relaxed">
-              Creating a trip sheet assigns selected jobs to vehicle and removes them from the pending queue.
+              Consolidates any selection of orders across all areas into a single driver manifest & delivery trip sheet.
             </p>
           </div>
         </div>

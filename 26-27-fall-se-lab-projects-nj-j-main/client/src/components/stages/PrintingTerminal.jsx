@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
+import { RushBadge } from '../common/RushBadge';
 
 // Master Printing Press Fleet Specifications (from airules.md Architecture)
 const MACHINE_FLEET = [
@@ -138,7 +139,8 @@ export const PrintingTerminal = () => {
     inventory,
     deductPaperInventory,
     openQCFlagModal,
-    issues
+    issues,
+    resolveJobRushStatus
   } = useApp();
 
   // Filter paper inventory items (category === 'Paper')
@@ -148,7 +150,13 @@ export const PrintingTerminal = () => {
   const [viewMode, setViewMode] = useState('kanban');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlant, setSelectedPlant] = useState('all'); // 'all', 'Kalkere', 'Byrathi'
+  const [statusFilter, setStatusFilter] = useState('active'); // 'active', 'completed', 'all'
   const [feedbackToast, setFeedbackToast] = useState(null);
+
+  const POST_PRESS_STAGES = ['FinishingQC', 'DispatchReady', 'Delivered', 'Completed'];
+  const isJobCompletedInPress = (job) => POST_PRESS_STAGES.includes(job?.current_stage);
+  const activePressJobsCount = (jobOrders || []).filter(j => !isJobCompletedInPress(j)).length;
+  const completedPressJobsCount = (jobOrders || []).filter(j => isJobCompletedInPress(j)).length;
 
   // Set of job IDs currently expanded in Kanban / List cards
   const [expandedJobIds, setExpandedJobIds] = useState(new Set());
@@ -419,6 +427,14 @@ export const PrintingTerminal = () => {
 
   // Filter jobs based on search query, filter type, and plant
   const filteredJobs = jobOrders.filter(job => {
+    // Status filter: active queue automatically excludes jobs completed on press and moved to Finishing/Dispatch
+    if (statusFilter === 'active' && isJobCompletedInPress(job)) {
+      return false;
+    }
+    if (statusFilter === 'completed' && !isJobCompletedInPress(job)) {
+      return false;
+    }
+
     // Search query
     const q = searchQuery.toLowerCase().trim();
     if (q) {
@@ -532,6 +548,20 @@ export const PrintingTerminal = () => {
 
           {/* Plant & Fleet Filter Buttons */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Queue Status Selector */}
+            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+              <Sliders size={13} className="text-slate-500" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="active">Active Press Queue ({activePressJobsCount})</option>
+                <option value="completed">Completed / Handed Over ({completedPressJobsCount})</option>
+                <option value="all">All Press Orders ({jobOrders.length})</option>
+              </select>
+            </div>
+
             {/* Plant Selector */}
             <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
               <Building2 size={13} className="text-slate-500" />
@@ -582,8 +612,8 @@ export const PrintingTerminal = () => {
                 .filter(job => getJobMachineId(job) === machine.id)
                 .sort((a, b) => {
                   // Sort: Urgent rush orders first
-                  const aRush = a.is_rush_order || a.priority === 'Urgent';
-                  const bRush = b.is_rush_order || b.priority === 'Urgent';
+                  const aRush = resolveJobRushStatus(a);
+                  const bRush = resolveJobRushStatus(b);
                   if (aRush && !bRush) return -1;
                   if (!aRush && bRush) return 1;
 
@@ -646,9 +676,8 @@ export const PrintingTerminal = () => {
                     ) : (
                       machineJobs.map((job, idx) => {
                         const isExpanded = expandedJobIds.has(job.id);
-                        const isUrgent = job.is_rush_order || job.priority === 'Urgent';
+                        const isUrgent = resolveJobRushStatus(job);
                         const activeNote = getLastNote(job);
-                        const noteAuthor = getLastNoteAuthor(job);
                         const isJobRunning = job.current_stage === 'PressRun';
                         const paperState = getJobPaperState(job);
                         const selectedItem = paperInventory.find(p => p.id === paperState.paperItemId);
@@ -694,10 +723,10 @@ export const PrintingTerminal = () => {
                             key={job.id}
                             onClick={() => toggleExpandJob(job.id)}
                             className={`bg-white border rounded-lg p-2.5 transition flex flex-col gap-1.5 select-none cursor-pointer group w-full max-w-full box-border ${
-                              isExpanded
-                                ? 'border-purple-400 shadow-md ring-1 ring-purple-300'
-                                : isUrgent
-                                  ? 'border-amber-300 hover:border-amber-400 shadow-2xs'
+                              isUrgent
+                                ? 'urgent-glow-card border-rose-400 shadow-2xs'
+                                : isExpanded
+                                  ? 'border-purple-400 shadow-md ring-1 ring-purple-300'
                                   : isJobRunning
                                     ? 'border-emerald-300 hover:border-emerald-400 shadow-2xs'
                                     : 'border-slate-200 shadow-xs hover:border-slate-400 hover:shadow-xs'
@@ -706,13 +735,14 @@ export const PrintingTerminal = () => {
                           >
                             {/* Top Bar: Ticket No, Current Version & Expand Chevron */}
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                                   {job.job_ticket_number}
                                 </span>
                                 <span className="font-mono font-bold text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">
                                   {versionTag}
                                 </span>
+                                {isUrgent && <RushBadge size="xs" />}
                                 {(job.qc_flagged || issues.some(i => i.job_ticket_number === job.job_ticket_number && !i.resolved)) && (
                                   <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[9px] bg-rose-600 text-white flex items-center gap-0.5 shadow-2xs">
                                     <Flag size={8} /> QC
@@ -794,19 +824,6 @@ export const PrintingTerminal = () => {
                                   </div>
                                 </div>
 
-                                {/* Last Note Full View */}
-                                {activeNote && (
-                                  <div className="bg-amber-50/70 p-2 rounded-lg border border-amber-200/80 text-[11px] text-amber-950">
-                                    <div className="flex items-center justify-between text-[9px] font-mono text-amber-800 font-bold uppercase mb-0.5">
-                                      <span className="flex items-center gap-1">
-                                        <MessageSquare size={10} /> Latest Workstation Note
-                                      </span>
-                                      {noteAuthor && <span>by {noteAuthor}</span>}
-                                    </div>
-                                    <p className="italic">"{activeNote}"</p>
-                                  </div>
-                                )}
-
                                 {/* PAPER SUBSTRATE CONSUMPTION & REPEATED INVENTORY DEDUCTION */}
                                 {(() => {
                                   const currentPaperItem = selectedItem || paperInventory[0];
@@ -814,7 +831,6 @@ export const PrintingTerminal = () => {
                                   const isReams = currentPaperItem?.unit_of_measure === 'Reams';
                                   const reamsEquivalent = isReams && sheetsToAdd > 0 ? (sheetsToAdd / 500).toFixed(2) : sheetsToAdd;
                                   const totalSheetsUsed = Number(job.sheets_used) || 0;
-                                  const reamsTotal = isReams ? (totalSheetsUsed / 500).toFixed(2) : totalSheetsUsed;
 
                                   return (
                                     <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2 box-border w-full max-w-full overflow-hidden">
@@ -914,30 +930,6 @@ export const PrintingTerminal = () => {
                                           </span>
                                         </button>
                                       </div>
-
-                                      {/* Live Cumulative Status Message */}
-                                      {totalSheetsUsed > 0 ? (
-                                        <div className="p-2 bg-emerald-50 border border-emerald-200 rounded text-[10px] text-emerald-900 flex flex-col gap-0.5 box-border w-full">
-                                          <div className="flex items-center justify-between font-mono">
-                                            <span>
-                                              Cumulative Sheets Used:
-                                            </span>
-                                            <span className="font-bold text-emerald-800">
-                                              {totalSheetsUsed.toLocaleString()} sheets ({reamsTotal} Reams)
-                                            </span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-[9px] text-slate-500 pt-0.5 border-t border-emerald-200/60 font-mono">
-                                            <span>Warehouse Stock ({currentPaperItem?.name?.split('(')[0]?.trim()}):</span>
-                                            <span className="font-bold text-slate-800">
-                                              {currentPaperItem?.quantity_on_hand} {currentPaperItem?.unit_of_measure}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <p className="text-[10px] text-blue-700/80 italic break-words">
-                                          Target: {job.print_quantity?.toLocaleString() || 1000} sheets. Enter sheets used and click Deduct to reduce inventory.
-                                        </p>
-                                      )}
                                     </div>
                                   );
                                 })()}
@@ -1028,16 +1020,7 @@ export const PrintingTerminal = () => {
                                     </button>
                                   )}
 
-                                  <div className="flex items-center justify-between pt-1 gap-2 w-full max-w-full box-border">
-                                    <button
-                                      type="button"
-                                      onClick={() => bumpJobToTop(job.id)}
-                                      className={`btn btn-xxs ${isUrgent ? 'btn-warning' : 'btn-secondary'} cursor-pointer shrink-0 min-w-0`}
-                                      title="Bump to #1 in queue"
-                                    >
-                                      <Zap size={11} className="shrink-0" />
-                                      <span className="truncate">{isUrgent ? 'Top #1' : 'Prioritize'}</span>
-                                    </button>
+                                  <div className="flex items-center justify-end pt-1 gap-2 w-full max-w-full box-border">
                                     <button
                                       type="button"
                                       onClick={() => toggleExpandJob(job.id)}
@@ -1102,7 +1085,7 @@ export const PrintingTerminal = () => {
                     </tr>
                   ) : (
                     filteredJobs.map((job, idx) => {
-                      const isUrgent = job.is_rush_order || job.priority === 'Urgent';
+                      const isUrgent = resolveJobRushStatus(job);
                       const macId = getJobMachineId(job);
                       const machine = MACHINE_FLEET.find(m => m.id === macId) || MACHINE_FLEET[0];
                       const isJobRunning = job.current_stage === 'PressRun';
@@ -1114,12 +1097,12 @@ export const PrintingTerminal = () => {
                         <tr
                           key={job.id}
                           className={`hover:bg-slate-50/80 transition ${
-                            isUrgent ? 'bg-amber-50/30' : isJobRunning ? 'bg-emerald-50/20' : ''
+                            isUrgent ? 'bg-rose-50/30' : isJobRunning ? 'bg-emerald-50/20' : ''
                           }`}
                         >
                           {/* Rank & Ticket */}
                           <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
                                 isJobRunning
                                   ? 'bg-emerald-600 text-white'
@@ -1144,9 +1127,9 @@ export const PrintingTerminal = () => {
                               )}
                             </div>
                             {isUrgent && (
-                              <span className="inline-block mt-0.5 px-1 py-0.2 rounded text-[8px] font-bold bg-rose-100 text-rose-700 font-mono">
-                                [RUSH ORDER]
-                              </span>
+                              <div className="mt-0.5">
+                                <RushBadge size="xs" />
+                              </div>
                             )}
                           </td>
 
@@ -1297,7 +1280,7 @@ export const PrintingTerminal = () => {
         const activeJob = jobOrders.find(j => j.id === specSheetModalJob.id) || specSheetModalJob;
         const macId = getJobMachineId(activeJob);
         const machine = MACHINE_FLEET.find(m => m.id === macId) || MACHINE_FLEET[0];
-        const isUrgent = activeJob.priority === 'Urgent' || activeJob.is_rush_order;
+        const isUrgent = resolveJobRushStatus(activeJob);
         const activeNote = getLastNote(activeJob);
         const author = getLastNoteAuthor(activeJob);
 

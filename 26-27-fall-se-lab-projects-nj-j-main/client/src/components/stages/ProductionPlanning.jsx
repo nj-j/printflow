@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Kanban,
   Zap,
@@ -23,75 +23,464 @@ import {
   Send,
   Plus,
   History,
-  User
+  User,
+  RotateCcw,
+  Calculator,
+  DollarSign,
+  Check,
+  X,
+  Tag,
+  Scissors,
+  Truck
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
+import { RushBadge } from '../common/RushBadge';
+import { QuoteEstimatorModal } from '../common/QuoteEstimatorModal';
+import { TechnicalSpecSheetModal } from '../common/TechnicalSpecSheetModal';
 
 export const ProductionPlanning = () => {
   const {
     jobOrders,
+    setJobOrders,
     prepressJobs,
+    enquiries,
+    updateEnquiry,
+    salesBookings,
+    addSalesBooking,
+    resolveJobRushStatus,
     advanceJobStage,
+    rewindJobStage,
     addJobComment,
-    bumpJobToTop,
     setSelectedJobForModal,
     activeSubTab,
     setActiveSubTab,
     activeUser
   } = useApp();
 
+  // The 5 Canonical Print ERP Workflow Stages
+  const stages = [
+    { id: 'Quotation', label: '1. Quotation', color: '#2563eb', badgeClass: 'bg-blue-100 text-blue-800' },
+    { id: 'Prepress', label: '2. Prepress', color: '#8b5cf6', badgeClass: 'bg-purple-100 text-purple-800' },
+    { id: 'Press', label: '3. Press', color: '#f59e0b', badgeClass: 'bg-amber-100 text-amber-800' },
+    { id: 'Finishing', label: '4. Finishing', color: '#10b981', badgeClass: 'bg-emerald-100 text-emerald-800' },
+    { id: 'Dispatch', label: '5. Dispatch', color: '#06b6d4', badgeClass: 'bg-cyan-100 text-cyan-800' },
+  ];
+
+  // Helper to normalize any incoming stage into one of the 5 canonical stages
+  const mapToCanonicalStage = (stage) => {
+    if (!stage) return 'Quotation';
+    const s = String(stage).toLowerCase().trim();
+    if (s.includes('quote') || s.includes('cost') || s.includes('order desk') || s.includes('enquiry')) {
+      return 'Quotation';
+    }
+    if (s.includes('prep') || s.includes('design') || s.includes('plate') || s.includes('proof')) {
+      return 'Prepress';
+    }
+    if (s.includes('press') || s.includes('print')) {
+      return 'Press';
+    }
+    if (s.includes('finish') || s.includes('bind') || s.includes('qc') || s.includes('pack')) {
+      return 'Finishing';
+    }
+    if (s.includes('dispatch') || s.includes('deliver') || s.includes('logist')) {
+      return 'Dispatch';
+    }
+    return 'Press';
+  };
+
+  const getNextStage = (current) => {
+    const canonical = mapToCanonicalStage(current);
+    switch (canonical) {
+      case 'Quotation': return 'Prepress';
+      case 'Prepress': return 'Press';
+      case 'Press': return 'Finishing';
+      case 'Finishing': return 'Dispatch';
+      case 'Dispatch': return 'Completed';
+      default: return null;
+    }
+  };
+
+  const getPrevStage = (current) => {
+    const canonical = mapToCanonicalStage(current);
+    switch (canonical) {
+      case 'Dispatch': return 'Finishing';
+      case 'Finishing': return 'Press';
+      case 'Press': return 'Prepress';
+      case 'Prepress': return 'Quotation';
+      default: return null;
+    }
+  };
+
+  const [showRushOnly, setShowRushOnly] = useState(activeSubTab === 'rush');
+
+  // Set of card IDs currently expanded
+  const [expandedJobIds, setExpandedJobIds] = useState(new Set());
+
+  // Input states per card: { [cardId]: { comment: '', targetStage: '' } }
+  const [cardInputs, setCardInputs] = useState({});
+
+  // Modals state
+  const [specSheetModalEntity, setSpecSheetModalEntity] = useState(null);
+  const [quoteEstimatorEntity, setQuoteEstimatorEntity] = useState(null);
+  const [commentsModalJob, setCommentsModalJob] = useState(null);
+  const [modalNewComment, setModalNewComment] = useState('');
+
+  // QC Rewind / Send Back Modal State
+  const [qcRewindModalCard, setQcRewindModalCard] = useState(null);
+  const [qcTargetStage, setQcTargetStage] = useState('Press');
+  const [qcDefectCategory, setQcDefectCategory] = useState('Color / Inking Defect');
+  const [qcReturnNotes, setQcReturnNotes] = useState('');
+
   // Helper to dynamically retrieve the latest note or comment
-  const getLastNote = (job) => {
-    if (job?.comments && job.comments.length > 0) {
-      const last = job.comments[job.comments.length - 1];
+  const getLastNote = (card) => {
+    if (card?.comments && card.comments.length > 0) {
+      const last = card.comments[card.comments.length - 1];
       const text = typeof last === 'string' ? last : (last?.text || last?.comment);
       if (text && text.trim()) return text.trim();
     }
-    const matchedPrep = prepressJobs?.find(p => p.job_ticket_number === job.job_ticket_number);
-    if (matchedPrep?.comments && matchedPrep.comments.length > 0) {
-      const last = matchedPrep.comments[matchedPrep.comments.length - 1];
-      const text = typeof last === 'string' ? last : (last?.text || last?.comment);
-      if (text && text.trim()) return text.trim();
-    }
-    if (job?.last_note?.trim()) return job.last_note.trim();
-    if (job?.last_comment?.trim()) return job.last_comment.trim();
-    if (matchedPrep?.last_note?.trim()) return matchedPrep.last_note.trim();
-    if (matchedPrep?.notes?.trim()) return matchedPrep.notes.trim();
-    if (job?.notes?.trim()) return job.notes.trim();
+    if (card?.notes?.trim()) return card.notes.trim();
     return '';
   };
 
-  const getLastNoteAuthor = (job) => {
-    if (job?.comments && job.comments.length > 0) {
-      const last = job.comments[job.comments.length - 1];
+  const getLastNoteAuthor = (card) => {
+    if (card?.comments && card.comments.length > 0) {
+      const last = card.comments[card.comments.length - 1];
       if (last?.author) return last.author;
     }
-    const matchedPrep = prepressJobs?.find(p => p.job_ticket_number === job.job_ticket_number);
-    if (matchedPrep?.comments && matchedPrep.comments.length > 0) {
-      const last = matchedPrep.comments[matchedPrep.comments.length - 1];
-      if (last?.author) return last.author;
-    }
-    return job?.assigned_operator || matchedPrep?.assigned_designer || '';
+    return card?.assignedResource || '';
   };
 
-  const currentSubTab = activeSubTab || 'job_tickets';
+  const getInputs = (cardId, defaultStage) => {
+    return cardInputs[cardId] || {
+      comment: '',
+      targetStage: defaultStage,
+    };
+  };
 
-  // Set of job IDs currently expanded in the Kanban board
-  const [expandedJobIds, setExpandedJobIds] = useState(new Set());
+  const updateInput = (cardId, field, val, defaultStage) => {
+    setCardInputs(prev => {
+      const current = prev[cardId] || {
+        comment: '',
+        targetStage: defaultStage,
+      };
+      return {
+        ...prev,
+        [cardId]: {
+          ...current,
+          [field]: val
+        }
+      };
+    });
+  };
 
-  // Input states per card: { [jobId]: { comment: '', targetStage: '' } }
-  const [cardInputs, setCardInputs] = useState({});
+  const toggleExpandJob = (cardId) => {
+    setExpandedJobIds(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) {
+        next.delete(cardId);
+      } else {
+        next.add(cardId);
+      }
+      return next;
+    });
+  };
 
-  // Pop-out Modal States (pop out like View Full Card)
-  const [specSheetModalJob, setSpecSheetModalJob] = useState(null);
-  const [commentsModalJob, setCommentsModalJob] = useState(null);
-  const [modalNewComment, setModalNewComment] = useState('');
+  // Compile Unified Kanban Pipeline Cards
+  const unifiedCards = useMemo(() => {
+    const cards = [];
+    const seenTickets = new Set();
+    const seenNames = new Set();
+
+    // 1. Existing Production Job Orders (Prepress, Press, Finishing, Dispatch, or rewound Quotation)
+    (jobOrders || []).forEach((j, idx) => {
+      if (j.current_stage === 'Completed' || j.current_stage === 'Delivered') return;
+      const canonical = mapToCanonicalStage(j.current_stage);
+      const isUrgent = resolveJobRushStatus(j);
+      const ticket = j.job_ticket_number || j.id;
+      seenTickets.add(ticket);
+      if (j.customer_name) seenNames.add(j.customer_name.toLowerCase().trim());
+
+      cards.push({
+        id: j.id,
+        entityType: 'job_order',
+        rawEntity: j,
+        ticketNumber: ticket,
+        customerName: j.customer_name,
+        jobTitle: j.job_title || 'Commercial Print Job',
+        quantity: j.print_quantity || 1000,
+        currentStage: canonical,
+        priority: isUrgent ? 'Urgent' : (j.priority || 'Normal'),
+        isUrgent,
+        queuePosition: j.queue_position || idx + 1,
+        assignedResource: j.assigned_press_machine || j.assigned_operator || 'Pressroom',
+        paperDetails: j.paper_details,
+        colorSpec: j.color_spec,
+        finishingSpec: j.finishing_spec,
+        targetCompletionDate: j.target_completion_date,
+        totalCost: Number(j.total_cost || j.amount || 0),
+        advancePaid: Number(j.advance_paid || 0),
+        advanceRequired: Math.round(Number(j.total_cost || j.amount || 0) * 0.6),
+        isQuoted: true,
+        isAdvancePaid: Number(j.advance_paid || 0) >= Math.round(Number(j.total_cost || j.amount || 0) * 0.6),
+        qcFlagged: Boolean(j.qc_flagged || j.returned_from_qc),
+        lastQcReason: j.last_qc_return_reason || (j.notes?.includes('QC') ? j.notes : ''),
+        comments: j.comments || [],
+        notes: j.notes || j.last_note || '',
+      });
+    });
+
+    // 2. Prepress Jobs not yet linked in jobOrders
+    (prepressJobs || []).forEach((p, idx) => {
+      const ticket = p.job_ticket_number || p.id;
+      if (seenTickets.has(ticket)) return;
+      if (p.customer_name && seenNames.has(p.customer_name.toLowerCase().trim())) return;
+      seenTickets.add(ticket);
+      if (p.customer_name) seenNames.add(p.customer_name.toLowerCase().trim());
+
+      const isUrgent = p.priority === 'Urgent' || p.is_rush_order;
+      cards.push({
+        id: p.id,
+        entityType: 'prepress_job',
+        rawEntity: p,
+        ticketNumber: ticket,
+        customerName: p.customer_name,
+        jobTitle: p.job_title || p.job_specification || 'Artwork & Prepress Job',
+        quantity: p.quantity || 1000,
+        currentStage: 'Prepress',
+        priority: isUrgent ? 'Urgent' : 'Normal',
+        isUrgent,
+        queuePosition: 20 + idx,
+        assignedResource: p.assigned_designer || 'Prepress Studio',
+        paperDetails: p.paper_details || p.paper,
+        colorSpec: p.color_spec || p.color,
+        finishingSpec: p.finishing_spec,
+        targetCompletionDate: p.target_completion_date || p.expected_delivery,
+        totalCost: Number(p.amount || 0),
+        advancePaid: 0,
+        advanceRequired: Math.round(Number(p.amount || 0) * 0.6),
+        isQuoted: Number(p.amount || 0) > 0,
+        isAdvancePaid: false,
+        qcFlagged: Boolean(p.returned_from_qc),
+        lastQcReason: p.last_note?.includes('QC') ? p.last_note : '',
+        comments: p.comments || [],
+        notes: p.notes || p.last_note || '',
+      });
+    });
+
+    // 3. Enquiries (Populate the QUOTATION column with live reactive status)
+    (enquiries || []).forEach((e, idx) => {
+      if (e.status === 'Cancelled') return;
+      const ticket = e.enquiry_no || (e.dn_no && e.dn_no !== '-' ? `DN-${e.dn_no}` : e.id);
+      if (seenTickets.has(ticket) || seenTickets.has(e.id)) return;
+      if (e.customer_name && seenNames.has(e.customer_name.toLowerCase().trim())) return;
+
+      const canonical = mapToCanonicalStage(e.current_stage);
+      const isUrgent = e.priority === 'Urgent' || e.is_rush_order || e.urgency === 'Urgent';
+      const amt = Number(e.amount || 0);
+      const isQuoted = Boolean(e.quotation_generated || (amt > 0 && e.costing_status === 'Costed'));
+      const advReq = Math.round(amt * 0.6);
+      const advRecv = Number(e.advance) || (e.status === 'Completed' || e.advance_remarks?.toLowerCase().includes('full') ? amt : 0);
+      const isAdvPaid = isQuoted && (advRecv >= advReq || e.advance_remarks?.toLowerCase().includes('full') || e.status === 'Completed');
+
+      // If an enquiry is already in a later stage, map it; otherwise default to Quotation
+      const stage = (canonical === 'Completed' || e.status === 'Completed') ? 'Completed' : canonical;
+      if (stage === 'Completed') return;
+
+      cards.push({
+        id: e.id,
+        entityType: 'enquiry',
+        rawEntity: e,
+        ticketNumber: ticket,
+        customerName: e.customer_name,
+        jobTitle: e.job_specification || e.job_name || 'Commercial Enquiry',
+        quantity: parseInt(e.quantity) || 1000,
+        currentStage: stage,
+        priority: isUrgent ? 'Urgent' : 'Normal',
+        isUrgent,
+        queuePosition: 50 + idx,
+        assignedResource: e.quote_assigned_to ? `${e.quote_assigned_to} (Sales)` : (e.prepress && e.prepress !== '-' ? e.prepress : 'Order Desk'),
+        paperDetails: e.paper,
+        colorSpec: e.color,
+        finishingSpec: Array.isArray(e.finishing) ? e.finishing.join(', ') : e.finishing,
+        targetCompletionDate: e.expected_delivery,
+        totalCost: amt,
+        advancePaid: advRecv,
+        advanceRequired: advReq,
+        isQuoted,
+        isAdvancePaid: isAdvPaid,
+        qcFlagged: false,
+        lastQcReason: '',
+        comments: [],
+        notes: e.support_notes || e.amount_note || '',
+      });
+    });
+
+    return cards;
+  }, [jobOrders, prepressJobs, enquiries, resolveJobRushStatus]);
+
+  const activeCards = unifiedCards.filter(c => c.currentStage !== 'Completed');
+  const urgentCardsCount = activeCards.filter(c => c.isUrgent).length;
+
+  const handleExpandAll = () => {
+    setExpandedJobIds(new Set(activeCards.map(c => c.id)));
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedJobIds(new Set());
+  };
+
+  // Stage Advancement Handler
+  const handleAdvanceStage = (card, targetNextStage, comment = '') => {
+    const next = targetNextStage || getNextStage(card.currentStage);
+    if (!next) return;
+
+    if (card.entityType === 'enquiry') {
+      const enq = card.rawEntity;
+      updateEnquiry(enq.id, {
+        current_stage: next === 'Prepress' ? 'Pre-Press' : next,
+        status: 'Pending',
+      });
+
+      // Ensure a production job order exists for downstream press & finishing
+      const existingJob = jobOrders.find(j => j.job_ticket_number === card.ticketNumber || j.id === card.id);
+      if (!existingJob) {
+        const isRush = card.isUrgent;
+        const newJob = {
+          id: `job-${Date.now()}`,
+          job_ticket_number: card.ticketNumber.startsWith('JT') ? card.ticketNumber : `JT-2026-${card.ticketNumber.replace(/\D/g, '') || String(Date.now()).slice(-4)}`,
+          customer_id: enq.customer_id || `cust-${enq.id}`,
+          customer_name: enq.customer_name,
+          job_title: enq.job_specification || enq.job_name || 'Commercial Print Job',
+          production_type: 'Offset',
+          print_quantity: parseInt(enq.quantity) || 1000,
+          paper_details: enq.paper || '130 GSM Gloss Art Paper (23" x 36")',
+          color_spec: enq.color || '4/4 Front & Back (Process CMYK)',
+          finishing_spec: Array.isArray(enq.finishing) ? enq.finishing.join(', ') : (enq.finishing || 'Standard Trimming'),
+          current_stage: next,
+          priority: card.priority,
+          is_rush_order: isRush,
+          queue_position: 1,
+          assigned_press_machine: 'Ryobi 660 (Ramamurthy Nagar Plant)',
+          assigned_operator: 'Rajesh Nair',
+          target_completion_date: enq.expected_delivery || new Date(Date.now() + 86400000 * 2).toISOString(),
+          created_at: new Date().toISOString(),
+          advance_paid: card.advancePaid,
+          balance_due: Math.max(0, card.totalCost - card.advancePaid),
+          comments: comment ? [{
+            id: `com-${Date.now()}`,
+            text: comment,
+            author: activeUser?.full_name || 'Production Operator',
+            stage: next,
+            timestamp: new Date().toISOString()
+          }] : []
+        };
+        setJobOrders(prev => [newJob, ...prev]);
+      } else {
+        advanceJobStage(existingJob.id, next, comment, 0);
+      }
+    } else {
+      advanceJobStage(card.id, next, comment, 0);
+    }
+
+    // Reset card comment input
+    setCardInputs(prev => ({
+      ...prev,
+      [card.id]: {
+        ...prev[card.id],
+        comment: '',
+      }
+    }));
+  };
+
+  const handleSaveLogOnly = (card) => {
+    const inputs = getInputs(card.id, getNextStage(card.currentStage));
+    const comment = inputs.comment.trim();
+    if (!comment) return;
+
+    if (card.entityType === 'job_order') {
+      addJobComment(card.id, comment, 0);
+    } else if (card.entityType === 'enquiry') {
+      updateEnquiry(card.id, {
+        support_notes: `${card.notes ? card.notes + ' | ' : ''}${comment}`
+      });
+    }
+
+    setCardInputs(prev => ({
+      ...prev,
+      [card.id]: {
+        ...prev[card.id],
+        comment: '',
+      }
+    }));
+  };
+
+  // QC Rewind Confirmation Handler
+  const handleConfirmQcRewind = () => {
+    if (!qcRewindModalCard) return;
+    const reasonText = `[${qcDefectCategory}]: ${qcReturnNotes.trim() || 'Returned for QC rework and correction.'}`;
+    rewindJobStage(qcRewindModalCard.id, qcTargetStage, reasonText);
+    setQcRewindModalCard(null);
+    setQcReturnNotes('');
+  };
+
+  const handleApplyQuoteFromKanban = (newAmount, quoteDetails) => {
+    if (!quoteEstimatorEntity) return;
+    const enq = quoteEstimatorEntity.rawEntity;
+    const isRush = quoteDetails.priority === 'Urgent';
+    const resolvedPriority = isRush ? 'Urgent' : 'Normal';
+
+    if (enq?.id) {
+      updateEnquiry(enq.id, {
+        amount: newAmount,
+        quotation_generated: true,
+        costing_status: 'Costed',
+        priority: resolvedPriority,
+        is_rush_order: isRush,
+        job_specification: quoteDetails.jobTitle || enq.job_specification,
+        paper: quoteDetails.paperType || enq.paper,
+        size: quoteDetails.sheetSize || enq.size,
+        quantity: quoteDetails.quantity || enq.quantity,
+      });
+
+      // Mirror in Sales Bookings
+      const advanceReq = Math.round(Number(newAmount) * 0.6);
+      const existingAdv = Number(enq.advance) || (enq.status === 'Completed' || enq.advance_remarks?.toLowerCase().includes('full') ? Number(newAmount) : 0);
+      const isBooked = existingAdv >= advanceReq && advanceReq > 0;
+
+      addSalesBooking({
+        booking_number: enq.dn_no && enq.dn_no !== '-' 
+          ? `SO-2026-${enq.dn_no}` 
+          : `SO-2026-${enq.id.replace(/\D/g, '') || String(Date.now()).slice(-4)}`,
+        quote_id: `q-${enq.id}`,
+        enquiry_id: enq.id,
+        customer_id: enq.customer_id || `cust-${enq.id}`,
+        customer_name: enq.customer_name,
+        customer_po_ref: enq.dn_no && enq.dn_no !== '-' ? `DN-${enq.dn_no}` : (enq.enquiry_no || enq.id),
+        job_title: quoteDetails.jobTitle || enq.job_name || enq.job_specification || 'Commercial Print Job',
+        confirmation_channel: enq.source || 'Walk-in',
+        confirmation_date: new Date().toISOString().split('T')[0],
+        order_total: Number(newAmount),
+        advance_required: advanceReq,
+        advance_received: existingAdv,
+        balance_pending: Math.max(0, Number(newAmount) - existingAdv),
+        booking_status: isBooked ? 'Booked' : 'Awaiting Advance',
+        production_release: isBooked,
+        priority: resolvedPriority,
+        is_rush_order: isRush,
+        prepress: enq.prepress && enq.prepress !== '-' ? enq.prepress : 'Aruna'
+      });
+    }
+
+    setQuoteEstimatorEntity(null);
+  };
 
   const handleModalAddComment = () => {
     if (!commentsModalJob || !modalNewComment.trim()) return;
     const text = modalNewComment.trim();
-    addJobComment(commentsModalJob.id, text, 0);
+    if (commentsModalJob.entityType === 'job_order') {
+      addJobComment(commentsModalJob.id, text, 0);
+    }
     const newComment = {
       id: `com-${Date.now()}`,
       text: text,
@@ -102,483 +491,406 @@ export const ProductionPlanning = () => {
     setCommentsModalJob(prev => ({
       ...prev,
       comments: [...(prev.comments || []), newComment],
-      last_note: text
+      notes: text
     }));
     setModalNewComment('');
   };
 
-  const getInputs = (jobId, defaultStage) => {
-    return cardInputs[jobId] || {
-      comment: '',
-      targetStage: defaultStage,
-      showPreview: false,
-      showComments: false
-    };
-  };
-
-  const updateInput = (jobId, field, val, defaultStage) => {
-    setCardInputs(prev => {
-      const current = prev[jobId] || {
-        comment: '',
-        targetStage: defaultStage,
-        showPreview: false,
-        showComments: false
-      };
-      return {
-        ...prev,
-        [jobId]: {
-          ...current,
-          [field]: val
-        }
-      };
-    });
-  };
-
-  const toggleExpandJob = (jobId) => {
-    setExpandedJobIds(prev => {
-      const next = new Set(prev);
-      if (next.has(jobId)) {
-        next.delete(jobId);
-      } else {
-        next.add(jobId);
-      }
-      return next;
-    });
-  };
-
-  const handleExpandAll = () => {
-    setExpandedJobIds(new Set(jobOrders.map(j => j.id)));
-  };
-
-  const handleCollapseAll = () => {
-    setExpandedJobIds(new Set());
-  };
-
-  const stages = [
-    { id: 'DesignProofing', label: '1. Design & Proofing', color: '#8b5cf6' },
-    { id: 'PlateMaking', label: '2. CTP Plate Making', color: '#ec4899' },
-    { id: 'PressRun', label: '3. Offset Press Run', color: '#f59e0b' },
-    { id: 'FinishingQC', label: '4. Finishing & QC', color: '#10b981' },
-    { id: 'DispatchReady', label: '5. Dispatch Ready', color: '#06b6d4' },
-  ];
-
-  const getNextStage = (current) => {
-    switch (current) {
-      case 'DesignProofing': return 'PlateMaking';
-      case 'PlateMaking': return 'PressRun';
-      case 'PressRun': return 'FinishingQC';
-      case 'FinishingQC': return 'DispatchReady';
-      case 'DispatchReady': return 'Delivered';
-      default: return null;
-    }
-  };
-
-  const getPrevStage = (current) => {
-    switch (current) {
-      case 'PlateMaking': return 'DesignProofing';
-      case 'PressRun': return 'PlateMaking';
-      case 'FinishingQC': return 'PressRun';
-      case 'DispatchReady': return 'FinishingQC';
-      default: return null;
-    }
-  };
-
-  const activeJobs = jobOrders.filter(j => j.current_stage !== 'Completed');
-  const urgentJobsCount = jobOrders.filter(
-    j => (j.priority === 'Urgent' || j.is_rush_order) && j.current_stage !== 'Completed'
-  ).length;
-
-  const subTabs = [
-    {
-      id: 'job_tickets',
-      label: 'Digital Job Tickets',
-      icon: Kanban,
-      badge: `${activeJobs.length} Active`,
-      badgeColor: 'bg-blue-100 text-blue-700'
-    },
-    {
-      id: 'allocation',
-      label: 'Machine Allocation',
-      icon: Printer,
-      badge: 'Registered Fleet',
-      badgeColor: 'bg-purple-100 text-purple-700'
-    },
-    {
-      id: 'rush',
-      label: 'Rush Fast-Track',
-      icon: Zap,
-      badge: urgentJobsCount > 0 ? `${urgentJobsCount} Rush` : null,
-      badgeColor: 'bg-rose-100 text-rose-700'
-    }
-  ];
-
-  const handleAdvanceWithLog = (job, defaultNextStage) => {
-    const inputs = getInputs(job.id, defaultNextStage);
-    const comment = inputs.comment.trim();
-    const targetStage = inputs.targetStage || defaultNextStage || 'PressRun';
-
-    advanceJobStage(job.id, targetStage, comment, 0);
-
-    // Reset inputs
-    setCardInputs(prev => ({
-      ...prev,
-      [job.id]: {
-        ...prev[job.id],
-        comment: '',
-      }
-    }));
-  };
-
-  const handleSaveLogOnly = (job) => {
-    const inputs = getInputs(job.id, getNextStage(job.current_stage));
-    const comment = inputs.comment.trim();
-
-    if (!comment) return;
-
-    addJobComment(job.id, comment, 0);
-
-    setCardInputs(prev => ({
-      ...prev,
-      [job.id]: {
-        ...prev[job.id],
-        comment: '',
-      }
-    }));
-  };
-
   return (
     <div className="space-y-3">
-      {/* Consolidated Module Header with Sub-Tabs */}
+      {/* Module Header Bar */}
       <div className="bg-white border-b border-slate-200 px-6 py-3 shadow-2xs select-none">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-[1600px] mx-auto">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#001523] text-white flex items-center justify-center font-bold text-sm shadow-xs font-mono">
               03
             </div>
-            <h1 className="text-base font-bold text-slate-900 tracking-tight">Planning & Kanban</h1>
-          </div>
-
-          {/* Sub-Tab Navigation Bar */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 text-xs">
-            {subTabs.map(tab => {
-              const Icon = tab.icon;
-              const isActive = currentSubTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveSubTab(tab.id)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
-                    isActive
-                      ? 'bg-white text-[#001523] font-bold shadow-xs border border-slate-200'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                  }`}
-                >
-                  <Icon size={14} className={isActive ? 'text-blue-600' : 'text-slate-500'} />
-                  <span>{tab.label}</span>
-                  {tab.badge && (
-                    <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold ${tab.badgeColor}`}>
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <div className="stage-page-container">
-        {/* Machine Allocation Summary if allocation tab active */}
-        {currentSubTab === 'allocation' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-              <div className="flex justify-between items-center mb-1">
-                <span className="font-bold text-xs text-slate-900">Lithrone 26 (Ramamurthy Nagar Plant)</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              </div>
-              <p className="text-[11px] text-slate-500">Allocated: 2 Multi-Color Offset Jobs</p>
-              <div className="mt-2 text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold inline-block">
-                Running @ 13,000 IPH Max
-              </div>
-            </div>
-
-            <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-              <div className="flex justify-between items-center mb-1">
-                <span className="font-bold text-xs text-slate-900">Ryobi 660 (Ramamurthy Nagar Plant)</span>
-                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              </div>
-              <p className="text-[11px] text-slate-500">Allocated: 1 Active Commercial Job</p>
-              <div className="mt-2 text-[10px] font-mono text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-bold inline-block">
-                Plate Mounting & Make-Ready
-              </div>
-            </div>
-
-            <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-              <div className="flex justify-between items-center mb-1">
-                <span className="font-bold text-xs text-slate-900">Konica Minolta C4080 (Dual Plants)</span>
-                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              </div>
-              <p className="text-[11px] text-slate-500">Allocated: Short-Run Production Color</p>
-              <div className="mt-2 text-[10px] font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-bold inline-block">
-                Digital Production @ 81 PPM
-              </div>
+            <div>
+              <h1 className="text-base font-bold text-slate-900 tracking-tight">Planning & Kanban</h1>
+              <p className="text-[11px] text-slate-500 font-medium">End-to-End Workflow Command Center</p>
             </div>
           </div>
-        )}
 
-        {/* Board Controls: Condensed / Expanded Switcher Toolbar */}
-        <div className="bg-white rounded-xl border border-slate-200 px-4 py-2.5 mb-3 shadow-2xs flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 text-slate-600">
-            <span className="font-bold text-slate-800 uppercase font-mono text-[11px]">Kanban View Mode:</span>
-            <span className="text-slate-400">|</span>
-            <span className="text-[11px] text-slate-500">
-              Cards are <b>condensed with date</b>. Click any card to expand hours worked, comments, and the full Job Card.
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
+          {/* Controls: Only Rush Jobs & Collapse All */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleExpandAll}
-              className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition cursor-pointer"
-              title="Expand all cards across columns"
+              onClick={() => setShowRushOnly(prev => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                showRushOnly
+                  ? 'bg-rose-50 text-rose-700 border-rose-300 shadow-xs ring-1 ring-rose-200'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+              }`}
+              title={showRushOnly ? "Showing Rush Jobs only (Click to show all)" : "Filter to Rush Jobs only"}
             >
-              <Maximize2 size={12} />
-              <span>Expand All</span>
+              <Zap size={13} className={showRushOnly ? "text-rose-600 fill-rose-600" : "text-amber-500"} />
+              <span>Rush Jobs</span>
+              {urgentCardsCount > 0 && (
+                <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold ${
+                  showRushOnly ? 'bg-rose-200 text-rose-900' : 'bg-rose-100 text-rose-700'
+                }`}>
+                  {urgentCardsCount}
+                </span>
+              )}
             </button>
+
             <button
               type="button"
               onClick={handleCollapseAll}
-              className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-bold text-xs transition cursor-pointer shadow-2xs"
               title="Collapse all cards to minimal view"
             >
-              <Minimize2 size={12} />
+              <Minimize2 size={13} className="text-slate-500" />
               <span>Collapse All</span>
             </button>
             {expandedJobIds.size > 0 && (
-              <span className="ml-1 text-[10px] font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold border border-blue-200">
+              <span className="text-[10px] font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold border border-blue-200">
                 {expandedJobIds.size} Expanded
               </span>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Kanban Board Multi-Column Layout */}
-        <div className="kanban-board-container">
+      <div className="stage-page-container">
+        {/* 5-Column Kanban Board Layout */}
+        <div className="kanban-board-container grid grid-cols-1 md:grid-cols-5 gap-3">
           {stages.map(stage => {
-            const columnJobs = jobOrders
-              .filter(j => {
-                if (j.current_stage !== stage.id) return false;
-                if (currentSubTab === 'rush') return j.priority === 'Urgent' || j.is_rush_order;
+            const columnCards = activeCards
+              .filter(card => {
+                if (card.currentStage !== stage.id) return false;
+                if (showRushOnly) return card.isUrgent;
                 return true;
               })
               .sort((a, b) => {
-                if (a.is_rush_order && !b.is_rush_order) return -1;
-                if (!a.is_rush_order && b.is_rush_order) return 1;
-                return (a.queue_position || 99) - (b.queue_position || 99);
+                // QC rework cards prioritized at top
+                if (a.qcFlagged && !b.qcFlagged) return -1;
+                if (!a.qcFlagged && b.qcFlagged) return 1;
+                // Rush cards next
+                if (a.isUrgent && !b.isUrgent) return -1;
+                if (!a.isUrgent && b.isUrgent) return 1;
+                return (a.queuePosition || 99) - (b.queuePosition || 99);
               });
 
             return (
-              <div key={stage.id} className="kanban-column">
-                <div className="kanban-column-header" style={{ borderTopColor: stage.color }}>
+              <div key={stage.id} className="kanban-column bg-slate-50/70 border border-slate-200 rounded-xl overflow-hidden flex flex-col min-w-[240px]">
+                {/* Column Header */}
+                <div
+                  className="kanban-column-header p-3 bg-white border-b border-slate-200"
+                  style={{ borderTop: `3px solid ${stage.color}` }}
+                >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-slate-900">{stage.label}</span>
-                    <span className="column-count-badge">{columnJobs.length}</span>
+                    <span className="font-bold text-xs uppercase tracking-tight text-slate-900">{stage.label}</span>
+                    <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                      {columnCards.length}
+                    </span>
                   </div>
                 </div>
 
-                <div className="kanban-cards-wrapper">
-                  {columnJobs.length === 0 ? (
-                    <div className="empty-kanban-slot">
-                      <span>No jobs in this stage</span>
+                {/* Cards Wrapper */}
+                <div className="kanban-cards-wrapper p-2 space-y-2 flex-1 overflow-y-auto max-h-[calc(100vh-14rem)]">
+                  {columnCards.length === 0 ? (
+                    <div className="p-6 text-center text-slate-400 text-xs italic bg-white/60 rounded-lg border border-dashed border-slate-200">
+                      No jobs in this stage
                     </div>
                   ) : (
-                    columnJobs.map((job, idx) => {
-                      const isUrgent = job.priority === 'Urgent' || job.is_rush_order;
-                      const nextStage = getNextStage(job.current_stage);
-                      const prevStage = getPrevStage(job.current_stage);
-                      const isExpanded = expandedJobIds.has(job.id);
-                      const inputs = getInputs(job.id, nextStage);
+                    columnCards.map((card, idx) => {
+                      const nextStage = getNextStage(card.currentStage);
+                      const prevStage = getPrevStage(card.currentStage);
+                      const isExpanded = expandedJobIds.has(card.id);
+                      const inputs = getInputs(card.id, nextStage);
 
-                      const formattedDate = job.target_completion_date
-                        ? new Date(job.target_completion_date).toLocaleDateString('en-IN', {
+                      const formattedDate = card.targetCompletionDate
+                        ? new Date(card.targetCompletionDate).toLocaleDateString('en-IN', {
                             day: 'numeric',
                             month: 'short',
-                            year: 'numeric'
                           })
                         : 'Today';
 
                       return (
                         <div
-                          key={job.id}
-                          onClick={() => toggleExpandJob(job.id)}
-                          className={`kanban-job-card cursor-pointer transition select-none group ${
-                            isUrgent ? 'urgent-glow-card' : ''
-                          } ${isExpanded ? 'border-blue-400 shadow-md ring-1 ring-blue-300' : 'hover:border-slate-400 hover:shadow-xs'}`}
-                          title={isExpanded ? 'Click to collapse card' : 'Click to expand details'}
+                          key={card.id}
+                          onClick={() => toggleExpandJob(card.id)}
+                          className={`kanban-job-card bg-white border rounded-xl p-3 shadow-2xs cursor-pointer transition select-none group ${
+                            card.qcFlagged
+                              ? 'border-rose-400 ring-1 ring-rose-300 bg-rose-50/20'
+                              : card.isUrgent
+                              ? 'border-amber-400 ring-1 ring-amber-300'
+                              : isExpanded
+                              ? 'border-blue-400 shadow-md ring-1 ring-blue-300'
+                              : 'border-slate-200 hover:border-slate-400 hover:shadow-xs'
+                          }`}
                         >
-                          {/* Top Row: Identifier, Rank, Rush Tag & Expand Toggle Indicator */}
-                          <div className="card-top-row">
-                            <div className="flex items-center gap-1.5">
-                              <span className="queue-rank-badge">#{job.queue_position || idx + 1}</span>
-                              <span className="ticket-no font-bold text-xs text-slate-900 font-mono">
-                                {job.job_ticket_number}
+                          {/* Top Row: Rank, Ticket, Badges & Expand Indicator */}
+                          <div className="flex items-center justify-between gap-1 mb-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                #{idx + 1}
+                              </span>
+                              <span className="font-mono font-bold text-xs text-slate-900">
+                                {card.ticketNumber}
                               </span>
                             </div>
+
                             <div className="flex items-center gap-1">
-                              {isUrgent ? (
-                                <span className="badge badge-danger text-xxs font-bold flex items-center gap-0.5">
-                                  <Zap size={11} className="animate-pulse" /> [RUSH]
-                                </span>
-                              ) : (
-                                <span className="badge badge-secondary text-xxs font-mono">{job.production_type}</span>
+                              {card.isUrgent && <RushBadge size="xs" />}
+
+                              {/* Quotation Stage Sub-state Badges */}
+                              {stage.id === 'Quotation' && (
+                                <>
+                                  {!card.isQuoted ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap">
+                                      Pending Quote
+                                    </span>
+                                  ) : !card.isAdvancePaid ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-300 whitespace-nowrap">
+                                      Pending Advance
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap">
+                                      Advance Cleared
+                                    </span>
+                                  )}
+                                </>
                               )}
+
                               <span className="text-slate-400 group-hover:text-blue-600 transition p-0.5 rounded">
                                 {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                               </span>
                             </div>
                           </div>
 
-                          {/* CONDENSED VIEW (Minimal Details with DATE) */}
-                          {!isExpanded && (
-                            <div className="space-y-1.5 pt-0.5">
-                              {/* Job Title Truncated */}
-                              <h4 className="text-xs font-bold text-slate-900 truncate leading-snug">
-                                {job.job_title}
-                              </h4>
+                          {/* QC REWORK BANNER (If Rewound by QC) */}
+                          {card.qcFlagged && (
+                            <div className="bg-rose-50 border border-rose-300 text-rose-900 rounded-md p-1.5 mb-2 shadow-2xs animate-in fade-in">
+                              <div className="flex items-center gap-1 font-black text-[10px] text-rose-800 uppercase tracking-tight">
+                                <AlertCircle size={12} className="text-rose-600 shrink-0" />
+                                <span>QC REWORK RETURN</span>
+                              </div>
+                              <p className="mt-0.5 text-[10px] text-rose-700 font-medium italic line-clamp-2">
+                                {card.lastQcReason || 'Returned from downstream station for correction.'}
+                              </p>
+                            </div>
+                          )}
 
-                              {/* Customer & Quantity Row */}
-                              <div className="flex items-center justify-between text-[11px] text-slate-600 font-medium">
-                                <span className="truncate max-w-[130px] font-semibold text-slate-700">
-                                  {job.customer_name}
+                          {/* Job Title & Customer */}
+                          <div className="space-y-0.5">
+                            <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-2">
+                              {card.jobTitle}
+                            </h4>
+                            <div className="flex items-center justify-between text-[11px] text-slate-600 font-medium pt-0.5">
+                              <span className="truncate max-w-[130px] font-semibold text-slate-700">
+                                {card.customerName}
+                              </span>
+                              <span className="font-mono text-slate-500 font-bold text-[10px] shrink-0">
+                                {card.quantity?.toLocaleString()} pcs
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Stage-Specific Metadata & Metrics */}
+                          <div className="mt-2 pt-1.5 border-t border-slate-100 text-[11px] space-y-1">
+                            {stage.id === 'Quotation' && (
+                              <div className="flex items-center justify-between text-[10px] font-mono">
+                                <span className="font-bold text-slate-900">
+                                  {card.totalCost > 0 ? `₹ ${card.totalCost.toLocaleString('en-IN')}` : 'Awaiting Quote'}
                                 </span>
-                                <span className="font-mono text-slate-500 font-bold text-[10px] shrink-0">
-                                  {job.print_quantity?.toLocaleString()} pcs
-                                </span>
+                                {card.totalCost > 0 && (
+                                  <span className={card.isAdvancePaid ? "text-emerald-700 font-semibold" : "text-amber-700 font-semibold"}>
+                                    Adv: ₹{card.advancePaid.toLocaleString('en-IN')} / ₹{card.advanceRequired.toLocaleString('en-IN')}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {stage.id === 'Prepress' && (
+                              <div className="flex items-center justify-between text-[10px] font-mono text-slate-600">
+                                <span className="truncate max-w-[120px]">Designer: {card.assignedResource}</span>
+                                <span className="text-purple-700 font-semibold">{formattedDate}</span>
+                              </div>
+                            )}
+
+                            {stage.id === 'Press' && (
+                              <div className="flex items-center justify-between text-[10px] font-mono text-slate-600">
+                                <span className="truncate max-w-[130px]">{card.assignedResource?.split(' ')[0]} {card.assignedResource?.split(' ')[1]}</span>
+                                <span className="text-amber-700 font-semibold">{formattedDate}</span>
+                              </div>
+                            )}
+
+                            {stage.id === 'Finishing' && (
+                              <div className="flex items-center justify-between text-[10px] text-slate-600">
+                                <span className="truncate max-w-[130px] font-medium">{card.finishingSpec || 'Standard Finishing'}</span>
+                                <span className="text-emerald-700 font-mono font-semibold">{formattedDate}</span>
+                              </div>
+                            )}
+
+                            {stage.id === 'Dispatch' && (
+                              <div className="flex items-center justify-between text-[10px] text-slate-600">
+                                <span className="text-cyan-800 font-semibold font-mono">Ready for Dispatch</span>
+                                <span className="font-mono text-slate-500">{formattedDate}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* COLLAPSED QUICK ACTIONS BAR */}
+                          {!isExpanded && (
+                            <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-1" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setSpecSheetModalEntity(card.rawEntity || card)}
+                                  className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-[10px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                                  title="View Job Spec Sheet"
+                                >
+                                  <FileText size={11} className="text-blue-600" /> Specs
+                                </button>
+
+                                {/* QC Send Back Button for Stages 2-5 */}
+                                {prevStage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setQcRewindModalCard(card);
+                                      setQcTargetStage(prevStage);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                                    title="Send Back / QC Rework Return"
+                                  >
+                                    <RotateCcw size={10} className="text-rose-600" /> QC Revert
+                                  </button>
+                                )}
                               </div>
 
-                              {/* Last Note snippet in collapsed card */}
-                              {getLastNote(job) && (
-                                <div className="text-[10px] text-slate-500 italic truncate" title={`Last Note: ${getLastNote(job)}`}>
-                                  "{getLastNote(job)}"
-                                </div>
-                              )}
+                              <div>
+                                {stage.id === 'Quotation' && !card.isQuoted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setQuoteEstimatorEntity(card)}
+                                    className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                                  >
+                                    <Calculator size={11} /> Quote
+                                  </button>
+                                )}
 
-                              {/* Minimal Bottom Bar: TARGET DATE + Machine Snippet */}
-                              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] font-mono text-slate-500">
-                                <span className="flex items-center gap-1 font-semibold text-slate-700">
-                                  <Calendar size={11} className="text-blue-600" />
-                                  <span>{formattedDate}</span>
-                                </span>
-                                <span className="truncate max-w-[110px] text-slate-400">
-                                  {job.assigned_press_machine?.split(' ')[0]} {job.assigned_press_machine?.split(' ')[1]}
-                                </span>
+                                {stage.id === 'Quotation' && card.isQuoted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdvanceStage(card, 'Prepress')}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer ${
+                                      card.isAdvancePaid
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                        : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200'
+                                    }`}
+                                    title={card.isAdvancePaid ? "Release to Prepress Studio" : "Advance to Prepress"}
+                                  >
+                                    <Send size={10} /> Prepress
+                                  </button>
+                                )}
+
+                                {stage.id !== 'Quotation' && nextStage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdvanceStage(card, nextStage)}
+                                    className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                                    title={`Advance to ${nextStage}`}
+                                  >
+                                    <Send size={10} /> {nextStage}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )}
 
-                          {/* EXPANDED VIEW (Full Specifications, Comments, Hours Worked, Stage Move, and Job Card View) */}
+                          {/* EXPANDED VIEW */}
                           {isExpanded && (
                             <div
                               onClick={(e) => e.stopPropagation()}
-                              className="space-y-3 pt-1 border-t border-slate-100 animate-in fade-in duration-100 text-xs"
+                              className="mt-3 pt-2 border-t border-slate-200 space-y-3 text-xs"
                             >
-                              {/* Full Job Title & Customer */}
-                              <div>
-                                <h4 className="text-xs font-bold text-slate-900 leading-snug">
-                                  {job.job_title}
-                                </h4>
-                                <div className="flex items-center justify-between text-[11px] text-slate-600 mt-0.5">
-                                  <span><b>Customer:</b> {job.customer_name}</span>
-                                  <span className="font-mono text-blue-700 font-bold">
-                                    <Calendar size={11} className="inline mr-1 text-blue-600" />
-                                    {formattedDate}
-                                  </span>
-                                </div>
-                                {(() => {
-                                  const activeNote = getLastNote(job);
-                                  const author = getLastNoteAuthor(job);
-                                  if (!activeNote) return null;
-                                  return (
-                                    <div className="mt-1 bg-slate-50 p-1.5 rounded border border-slate-100">
-                                      <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 mb-0.5">
-                                        <span className="font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1">
-                                          <MessageSquare size={10} className="text-blue-600" /> Last Note
-                                        </span>
-                                        {author && <span className="text-[9px] text-slate-400 font-sans">by {author}</span>}
-                                      </div>
-                                      <p className="text-[11px] text-slate-700 italic leading-snug">
-                                        "{activeNote}"
-                                      </p>
-                                    </div>
-                                  );
-                                })()}
+                              {/* Specification Highlights */}
+                              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 space-y-1 text-[11px]">
+                                {card.paperDetails && (
+                                  <div><span className="font-semibold text-slate-500">Stock:</span> <span className="font-medium text-slate-800">{card.paperDetails}</span></div>
+                                )}
+                                {card.colorSpec && (
+                                  <div><span className="font-semibold text-slate-500">Colors:</span> <span className="font-medium text-slate-800">{card.colorSpec}</span></div>
+                                )}
+                                {card.finishingSpec && (
+                                  <div><span className="font-semibold text-slate-500">Finishing:</span> <span className="font-medium text-slate-800">{card.finishingSpec}</span></div>
+                                )}
                               </div>
 
+                              {/* Last Note Snippet */}
+                              {getLastNote(card) && (
+                                <div className="bg-blue-50/60 p-2 rounded border border-blue-100 text-[11px] text-blue-900">
+                                  <div className="flex items-center justify-between text-[9px] font-bold text-blue-700 mb-0.5">
+                                    <span>LATEST WORKSTATION NOTE</span>
+                                    <span>by {getLastNoteAuthor(card) || 'Operator'}</span>
+                                  </div>
+                                  <p className="italic">"{getLastNote(card)}"</p>
+                                </div>
+                              )}
 
-                              {/* POP-OUT MODAL ACTIONS (Spec Sheet, Comments Log, Full Card) */}
+                              {/* Modal Launcher Buttons */}
                               <div className="grid grid-cols-3 gap-1.5 pt-1">
                                 <button
                                   type="button"
-                                  onClick={() => setSpecSheetModalJob(job)}
-                                  className="py-1.5 px-1 bg-white hover:bg-blue-50 text-blue-900 border border-blue-200 rounded font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
-                                  title="Pop out technical specification sheet like View Full Card"
+                                  onClick={() => setSpecSheetModalEntity(card.rawEntity || card)}
+                                  className="py-1.5 px-1 bg-white hover:bg-blue-50 text-blue-900 border border-blue-200 rounded font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
                                 >
                                   <FileText size={12} className="text-blue-600" />
-                                  <span className="truncate">View Spec Sheet</span>
+                                  <span className="truncate">Spec Sheet</span>
                                 </button>
 
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setCommentsModalJob(job);
+                                    setCommentsModalJob(card);
                                     setModalNewComment('');
                                   }}
-                                  className="py-1.5 px-1 bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 rounded font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
-                                  title="Pop out comments history log like View Full Card"
+                                  className="py-1.5 px-1 bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 rounded font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
                                 >
                                   <MessageSquare size={12} className="text-purple-600" />
-                                  <span className="truncate">Comments Log ({(job.comments || []).length})</span>
+                                  <span className="truncate">Comments</span>
                                 </button>
 
                                 <button
                                   type="button"
                                   onClick={() => setSelectedJobForModal({
-                                    ...job,
-                                    last_note: getLastNote(job) || job.last_note || job.notes,
-                                    notes: getLastNote(job) || job.notes
+                                    ...card.rawEntity,
+                                    job_ticket_number: card.ticketNumber,
+                                    job_title: card.jobTitle,
+                                    customer_name: card.customerName,
+                                    notes: getLastNote(card) || card.notes
                                   })}
-                                  className="py-1.5 px-1 bg-[#002b41] hover:bg-[#002b41]/90 text-white rounded font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
-                                  title="Pop out full printable production job card"
+                                  className="py-1.5 px-1 bg-[#002b41] hover:bg-[#002b41]/90 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer shadow-2xs"
                                 >
                                   <Printer size={12} />
-                                  <span className="truncate">Full Card</span>
+                                  <span className="truncate">Job Ticket</span>
                                 </button>
                               </div>
 
-                              {/* OPERATOR COMMENTS & NEXT STAGE PANEL */}
-                              <div className="bg-blue-50/60 border border-blue-200 rounded-lg p-2.5 space-y-2">
-                                {/* Comments Textarea */}
+                              {/* Operator Comment & Target Stage Controls */}
+                              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-2">
                                 <div className="space-y-1">
-                                  <label className="block text-[10px] font-semibold text-slate-700">
-                                    Operator / Workstation Comments:
+                                  <label className="block text-[10px] font-bold text-slate-700">
+                                    Operator / Workstation Log:
                                   </label>
                                   <textarea
                                     rows="2"
                                     value={inputs.comment}
-                                    onChange={(e) => updateInput(job.id, 'comment', e.target.value, nextStage)}
-                                    placeholder="Mention observations, make-ready runtime, color density, sheet inspection..."
-                                    className="w-full bg-white border border-slate-200 rounded p-1.5 text-[11px] text-slate-800 focus:outline-none focus:border-blue-500"
+                                    onChange={(e) => updateInput(card.id, 'comment', e.target.value, nextStage)}
+                                    placeholder="Add observations, make-ready runtime, color density..."
+                                    className="w-full bg-white border border-slate-300 rounded p-1.5 text-[11px] text-slate-800 focus:outline-none focus:border-blue-500"
                                   />
                                 </div>
 
-                                {/* Next Stage Progression Controls */}
-                                <div className="pt-2 border-t border-blue-200/60 space-y-1.5">
+                                <div className="pt-2 border-t border-slate-200 space-y-1.5">
                                   <div className="flex items-center justify-between text-[10px]">
                                     <span className="font-semibold text-slate-700">Target Next Stage:</span>
                                     <select
-                                      value={inputs.targetStage || nextStage || job.current_stage}
-                                      onChange={(e) => updateInput(job.id, 'targetStage', e.target.value, nextStage)}
+                                      value={inputs.targetStage || nextStage || card.currentStage}
+                                      onChange={(e) => updateInput(card.id, 'targetStage', e.target.value, nextStage)}
                                       className="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold text-blue-900 text-[10px] focus:outline-none"
                                     >
                                       {stages.map(st => (
@@ -586,26 +898,25 @@ export const ProductionPlanning = () => {
                                           {st.label}
                                         </option>
                                       ))}
-                                      <option value="Delivered">5. Delivered / Dispatched</option>
+                                      <option value="Completed">Completed / Delivered</option>
                                     </select>
                                   </div>
 
                                   <div className="flex items-center gap-1.5 pt-1">
                                     <button
                                       type="button"
-                                      onClick={() => handleSaveLogOnly(job)}
-                                      className="flex-1 py-1 px-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-bold text-[10px] transition flex items-center justify-center gap-1 cursor-pointer"
-                                      title="Save comment without moving stage"
+                                      onClick={() => handleSaveLogOnly(card)}
+                                      className="flex-1 py-1 px-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
                                     >
-                                      <Save size={11} /> Save Comment Only
+                                      <Save size={11} /> Save Log
                                     </button>
 
                                     <button
                                       type="button"
-                                      onClick={() => handleAdvanceWithLog(job, nextStage)}
-                                      className="flex-1 py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[10px] transition shadow-xs flex items-center justify-center gap-1 cursor-pointer"
+                                      onClick={() => handleAdvanceStage(card, inputs.targetStage || nextStage, inputs.comment)}
+                                      className="flex-1 py-1 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[10px] shadow-xs flex items-center justify-center gap-1 cursor-pointer"
                                     >
-                                      <Send size={11} /> Move to Next Stage
+                                      <Send size={11} /> Move Stage
                                     </button>
                                   </div>
                                 </div>
@@ -613,34 +924,28 @@ export const ProductionPlanning = () => {
 
                               {/* Footer Action Bar */}
                               <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                                <button
-                                  type="button"
-                                  onClick={() => bumpJobToTop(job.id)}
-                                  className={`btn btn-xxs ${isUrgent ? 'btn-warning' : 'btn-secondary'} cursor-pointer`}
-                                  title="Fast-track to position #1"
-                                >
-                                  <Zap size={11} /> {isUrgent ? 'Top #1' : 'Prioritize'}
-                                </button>
-
-                                <div className="flex items-center gap-1">
+                                <div>
                                   {prevStage && (
                                     <button
                                       type="button"
-                                      onClick={() => advanceJobStage(job.id, prevStage, 'Stage reverted')}
-                                      className="btn btn-xxs btn-secondary cursor-pointer"
-                                      title={`Revert to ${prevStage}`}
+                                      onClick={() => {
+                                        setQcRewindModalCard(card);
+                                        setQcTargetStage(prevStage);
+                                      }}
+                                      className="btn btn-xxs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold flex items-center gap-1 cursor-pointer"
                                     >
-                                      <ArrowLeft size={11} /> Back
+                                      <RotateCcw size={11} /> QC Send Back
                                     </button>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleExpandJob(job.id)}
-                                    className="text-[10px] font-bold text-slate-500 hover:text-slate-800 px-2 py-0.5 rounded border border-slate-200"
-                                  >
-                                    Collapse
-                                  </button>
                                 </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandJob(card.id)}
+                                  className="text-[10px] font-bold text-slate-500 hover:text-slate-800 px-2 py-0.5 rounded border border-slate-200"
+                                >
+                                  Collapse
+                                </button>
                               </div>
                             </div>
                           )}
@@ -655,227 +960,201 @@ export const ProductionPlanning = () => {
         </div>
       </div>
 
-      {/* 1. POP-OUT MODAL: TECHNICAL SPEC SHEET */}
-      {specSheetModalJob && (() => {
-        const activeJob = jobOrders.find(j => j.id === specSheetModalJob.id) || specSheetModalJob;
-        const matchedPrep = prepressJobs?.find(p => p.job_ticket_number === activeJob.job_ticket_number);
-        const stageObj = stages.find(s => s.id === activeJob.current_stage);
-        const stageLabel = stageObj?.label || activeJob.current_stage;
-        const isUrgent = activeJob.priority === 'Urgent' || activeJob.is_rush_order;
-        const activeNote = getLastNote(activeJob);
-        const author = getLastNoteAuthor(activeJob);
-
-        return (
-          <Modal
-            isOpen={!!specSheetModalJob}
-            onClose={() => setSpecSheetModalJob(null)}
-            title={`Technical Spec Sheet — ${activeJob.job_ticket_number}`}
-            maxWidth="max-w-2xl"
-          >
-            <div className="space-y-4 text-xs">
-              {/* Header / Summary Banner */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Job Order Details</span>
-                  <h4 className="font-bold text-slate-900 text-sm">{activeJob.job_title}</h4>
-                  <p className="text-slate-600 font-medium text-[11px]">{activeJob.customer_name}</p>
-                </div>
-                <div className="flex flex-wrap sm:flex-col items-start sm:items-end gap-1.5 text-[11px]">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                    Stage: {stageLabel}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    isUrgent ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700'
-                  }`}>
-                    Priority: {activeJob.priority || 'Normal'}
-                  </span>
-                  <span className="text-slate-500 font-semibold text-[10px] flex items-center gap-1">
-                    <Clock size={11} /> Target SLA: {activeJob.target_completion_date ? new Date(activeJob.target_completion_date).toLocaleDateString() : 'Standard'}
-                  </span>
-                </div>
+      {/* 1. QC REWIND / SEND BACK MODAL */}
+      {qcRewindModalCard && (
+        <Modal
+          isOpen={!!qcRewindModalCard}
+          onClose={() => setQcRewindModalCard(null)}
+          title={`Send Back Job #${qcRewindModalCard.ticketNumber} for QC Rework`}
+          maxWidth="max-w-lg"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg">
+              <div className="flex items-center justify-between text-[11px] mb-1">
+                <span className="font-bold text-rose-900">{qcRewindModalCard.jobTitle}</span>
+                <span className="font-mono text-rose-700">Current: {qcRewindModalCard.currentStage}</span>
               </div>
+              <p className="text-[11px] text-rose-800 font-medium">Customer: {qcRewindModalCard.customerName}</p>
+            </div>
 
-              {/* Technical Specifications Table */}
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <div className="bg-slate-100 px-3 py-2 font-bold text-slate-700 text-xs flex items-center gap-1.5 border-b border-slate-200">
-                  <Layers size={14} className="text-slate-500" />
-                  <span>Job Engineering & Press Specifications</span>
-                </div>
-                <table className="w-full text-left text-[11px]">
-                  <tbody className="divide-y divide-slate-200">
-                    <tr className="bg-white">
-                      <td className="py-2.5 px-3 font-semibold text-slate-500 w-1/3">Print Quantity:</td>
-                      <td className="py-2.5 px-3 font-bold text-blue-900">{activeJob.print_quantity?.toLocaleString()} Copies</td>
-                    </tr>
-                    <tr className="bg-slate-50/50">
-                      <td className="py-2.5 px-3 font-semibold text-slate-500">Assigned Press Machine:</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-800">{activeJob.assigned_press_machine}</td>
-                    </tr>
-                    <tr className="bg-white">
-                      <td className="py-2.5 px-3 font-semibold text-slate-500">Paper Substrate / Stock:</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-800">{activeJob.paper_details || '130 GSM Gloss Art Paper (23" x 36")'}</td>
-                    </tr>
-                    <tr className="bg-slate-50/50">
-                      <td className="py-2.5 px-3 font-semibold text-slate-500">Color Inks:</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-800">{activeJob.color_spec || '4/4 Front & Back Process CMYK'}</td>
-                    </tr>
-                    <tr className="bg-white">
-                      <td className="py-2.5 px-3 font-semibold text-slate-500">Plate Exposure / CTP:</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-800">{activeJob.plate_spec || matchedPrep?.plate_status || '4 CTP Thermal Plates (2400 DPI)'}</td>
-                    </tr>
-                    <tr className="bg-slate-50/50">
-                      <td className="py-2.5 px-3 font-semibold text-slate-500">Screen Ruling:</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-800">{activeJob.screen_ruling || '175 LPI Conventional Screening'}</td>
-                    </tr>
-                    <tr className="bg-white">
-                      <td className="py-2.5 px-3 font-semibold text-slate-500">Post-Press Bindery:</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-800">{activeJob.finishing_spec || 'Thermal Matte Lamination, Folding, Center Pin Stitching, 3-Side Trim'}</td>
-                    </tr>
-                    <tr className="bg-slate-50/50">
-                      <td className="py-2.5 px-3 font-semibold text-slate-500">Assigned Lead Operator:</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-800">{activeJob.assigned_operator || 'Rajesh Nair'}</td>
-                    </tr>
-                  </tbody>
-                </table>
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-800">
+                Rewind Destination Stage:
+              </label>
+              <select
+                value={qcTargetStage}
+                onChange={(e) => setQcTargetStage(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded p-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-rose-500"
+              >
+                {stages.map(st => (
+                  <option key={st.id} value={st.id}>
+                    Return to {st.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-800">
+                Defect Category:
+              </label>
+              <select
+                value={qcDefectCategory}
+                onChange={(e) => setQcDefectCategory(e.target.value)}
+                className="w-full bg-white border border-slate-300 rounded p-2 text-xs text-slate-800 focus:outline-none focus:border-rose-500"
+              >
+                <option value="Color / Inking Defect">Color / Inking Defect (Density Drift / Hickey)</option>
+                <option value="Plate / CTP Imposition Defect">Plate / CTP Imposition Defect (Scratch / Wrong Imposition)</option>
+                <option value="Trimming / Die-cutting Flaw">Trimming / Die-cutting Flaw (Off Registration / Burrs)</option>
+                <option value="Lamination / Coating Flaw">Lamination / Coating Flaw (Peeling / Wrinkling)</option>
+                <option value="Customer Artwork / Spec Revision">Customer Artwork / Spec Revision (Client Updated File)</option>
+                <option value="Packaging / Delivery Error">Packaging / Delivery Error (Damaged Carton / Missing Label)</option>
+                <option value="Other Quality Concern">Other Quality Concern</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-800">
+                Rework Instructions & Defect Description:
+              </label>
+              <textarea
+                rows="3"
+                value={qcReturnNotes}
+                onChange={(e) => setQcReturnNotes(e.target.value)}
+                placeholder="Mention specific instructions (e.g., Reprint 400 sheets with Cyan density 1.45, fix front margin creep, remake black plate)..."
+                className="w-full bg-white border border-slate-300 rounded p-2 text-xs text-slate-800 focus:outline-none focus:border-rose-500"
+              />
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setQcRewindModalCard(null)}
+                className="btn btn-sm btn-secondary cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmQcRewind}
+                className="btn btn-sm bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <RotateCcw size={12} />
+                <span>Confirm QC Return</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 2. REUSABLE TECHNICAL SPEC SHEET MODAL */}
+      <TechnicalSpecSheetModal
+        isOpen={!!specSheetModalEntity}
+        onClose={() => setSpecSheetModalEntity(null)}
+        entity={specSheetModalEntity}
+        onOpenQuoteEstimator={(enq) => {
+          setSpecSheetModalEntity(null);
+          setQuoteEstimatorEntity({ rawEntity: enq });
+        }}
+      />
+
+      {/* 3. QUOTE ESTIMATOR MODAL */}
+      <QuoteEstimatorModal
+        isOpen={!!quoteEstimatorEntity}
+        onClose={() => setQuoteEstimatorEntity(null)}
+        enquiry={quoteEstimatorEntity?.rawEntity || quoteEstimatorEntity}
+        onApplyQuote={handleApplyQuoteFromKanban}
+      />
+
+      {/* 4. COMMENTS & WORKSTATION HISTORY MODAL */}
+      {commentsModalJob && (
+        <Modal
+          isOpen={!!commentsModalJob}
+          onClose={() => {
+            setCommentsModalJob(null);
+            setModalNewComment('');
+          }}
+          title={`Comments & Workstation History — ${commentsModalJob.ticketNumber}`}
+          maxWidth="max-w-2xl"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-slate-900 text-xs">{commentsModalJob.jobTitle}</h4>
+                <p className="text-slate-500 text-[11px]">{commentsModalJob.customerName}</p>
               </div>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
+                {(commentsModalJob.comments || []).length} Logged Entries
+              </span>
+            </div>
 
-              {/* Special Instructions / Notes */}
-              {activeNote && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-900">
-                  <div className="flex items-center justify-between text-[10px] font-bold uppercase text-amber-800 mb-0.5">
-                    <span>Special Job Notes / Observations</span>
-                    {author && <span className="font-normal text-amber-700 capitalize">by {author}</span>}
-                  </div>
-                  <p className="italic">"{activeNote}"</p>
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {(commentsModalJob.comments || []).length > 0 ? (
+                commentsModalJob.comments.map((com, idx) => {
+                  const comText = typeof com === 'string' ? com : (com.text || com.comment || '');
+                  const comAuthor = com.author || 'Workstation Operator';
+                  const comTime = com.timestamp ? new Date(com.timestamp).toLocaleString() : 'Recent update';
+                  return (
+                    <div key={com.id || idx} className="p-3 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-1">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-bold text-purple-900 flex items-center gap-1">
+                          <User size={11} className="text-purple-600" />
+                          {comAuthor}
+                        </span>
+                        <span className="text-slate-400 font-medium">{comTime}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-800 italic bg-purple-50/50 p-2 rounded border border-purple-100/50">
+                        "{comText}"
+                      </p>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-8 text-center text-slate-400 italic bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                  No workstation comments logged yet for this job order.
                 </div>
               )}
+            </div>
 
-              {/* Footer Actions */}
-              <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2">
+              <label className="block text-[11px] font-bold text-slate-800">
+                Add Workstation Comment / QA Note:
+              </label>
+              <textarea
+                rows="2"
+                value={modalNewComment}
+                onChange={(e) => setModalNewComment(e.target.value)}
+                placeholder="Type observations, plate inspection, color approvals, post-press remarks..."
+                className="w-full bg-white border border-slate-300 rounded p-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
+              />
+              <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={() => {
-                    const target = { ...activeJob };
-                    setSpecSheetModalJob(null);
-                    setSelectedJobForModal(target);
-                  }}
-                  className="btn btn-sm btn-secondary cursor-pointer flex items-center gap-1.5"
-                  title="Open Printable Full Job Ticket"
+                  disabled={!modalNewComment.trim()}
+                  onClick={handleModalAddComment}
+                  className="btn btn-sm btn-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                 >
-                  <Printer size={13} />
-                  <span>Open Printable Job Ticket</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSpecSheetModalJob(null)}
-                  className="btn btn-sm btn-outline cursor-pointer"
-                >
-                  Close Spec Sheet
+                  <Send size={12} />
+                  <span>Post Comment</span>
                 </button>
               </div>
             </div>
-          </Modal>
-        );
-      })()}
 
-      {/* 2. POP-OUT MODAL: COMMENTS & WORKSTATION LOG */}
-      {commentsModalJob && (() => {
-        const activeJob = jobOrders.find(j => j.id === commentsModalJob.id) || commentsModalJob;
-        const commentList = activeJob.comments || [];
-
-        return (
-          <Modal
-            isOpen={!!commentsModalJob}
-            onClose={() => {
-              setCommentsModalJob(null);
-              setModalNewComment('');
-            }}
-            title={`Comments & Workstation History — ${activeJob.job_ticket_number}`}
-            maxWidth="max-w-2xl"
-          >
-            <div className="space-y-4 text-xs">
-              {/* Header Summary */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <h4 className="font-bold text-slate-900 text-xs">{activeJob.job_title}</h4>
-                  <p className="text-slate-500 text-[11px]">{activeJob.customer_name}</p>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
-                  {commentList.length} Logged Entries
-                </span>
-              </div>
-
-              {/* Chronological Comments Thread */}
-              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                {commentList.length > 0 ? (
-                  commentList.map((com, idx) => {
-                    const comText = typeof com === 'string' ? com : (com.text || com.comment || '');
-                    const comAuthor = com.author || 'Workstation Operator';
-                    const comTime = com.timestamp ? new Date(com.timestamp).toLocaleString() : 'Recent update';
-                    return (
-                      <div key={com.id || idx} className="p-3 bg-white border border-slate-200 rounded-lg shadow-2xs space-y-1">
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-bold text-purple-900 flex items-center gap-1">
-                            <User size={11} className="text-purple-600" />
-                            {comAuthor}
-                          </span>
-                          <span className="text-slate-400 font-medium">{comTime}</span>
-                        </div>
-                        <p className="text-[11px] text-slate-800 italic bg-purple-50/50 p-2 rounded border border-purple-100/50">
-                          "{comText}"
-                        </p>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="py-8 text-center text-slate-400 italic bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                    No workstation comments logged yet for this job order.
-                  </div>
-                )}
-              </div>
-
-              {/* Active New Comment Form inside Modal */}
-              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2">
-                <label className="block text-[11px] font-bold text-slate-800">
-                  Add Workstation Comment / QA Note:
-                </label>
-                <textarea
-                  rows="2"
-                  value={modalNewComment}
-                  onChange={(e) => setModalNewComment(e.target.value)}
-                  placeholder="Type observations, plate inspection, color approvals, post-press remarks..."
-                  className="w-full bg-white border border-slate-300 rounded p-2 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
-                />
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    disabled={!modalNewComment.trim()}
-                    onClick={handleModalAddComment}
-                    className="btn btn-sm btn-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                  >
-                    <Send size={12} />
-                    <span>Post Comment</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Modal Close Button */}
-              <div className="pt-2 border-t border-slate-200 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCommentsModalJob(null);
-                    setModalNewComment('');
-                  }}
-                  className="btn btn-sm btn-secondary cursor-pointer"
-                >
-                  Close History
-                </button>
-              </div>
+            <div className="pt-2 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setCommentsModalJob(null);
+                  setModalNewComment('');
+                }}
+                className="btn btn-sm btn-secondary cursor-pointer"
+              >
+                Close History
+              </button>
             </div>
-          </Modal>
-        );
-      })()}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

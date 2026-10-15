@@ -11,6 +11,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { RushBadge } from '../common/RushBadge';
 
 export const FinishingQC = () => {
   const {
@@ -21,6 +22,7 @@ export const FinishingQC = () => {
     advanceJobStage,
     setSelectedJobForModal,
     setActiveTab,
+    resolveJobRushStatus,
   } = useApp();
 
   const finishingJobs = jobOrders.filter(j => j.current_stage === 'FinishingQC');
@@ -86,13 +88,13 @@ export const FinishingQC = () => {
               </div>
             ) : (
               finishingJobs.map(job => {
-                const isUrgent = job.priority === 'Urgent' || job.is_rush_order;
+                const isUrgent = resolveJobRushStatus(job);
                 return (
                   <div key={job.id} className={`finishing-job-card ${isUrgent ? 'urgent-border-pulse' : ''}`}>
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         <span className="ticket-tag font-bold">{job.job_ticket_number}</span>
-                        {isUrgent && <span className="badge badge-danger">[URGENT]</span>}
+                        {isUrgent && <RushBadge size="xs" />}
                       </div>
                       <span className="text-xs text-muted">
                         Due: <strong className={isUrgent ? 'text-danger' : 'text-primary'}>{new Date(job.target_completion_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>

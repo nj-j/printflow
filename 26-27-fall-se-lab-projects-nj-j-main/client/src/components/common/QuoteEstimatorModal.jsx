@@ -18,9 +18,11 @@ import {
   Phone
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { TechnicalSpecSheetModal } from './TechnicalSpecSheetModal';
 
 export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) => {
   const { customers, createQuote, activeUser } = useApp();
+  const [isSpecSheetOpen, setIsSpecSheetOpen] = useState(false);
 
   // Try to parse quantity from job_specification or default
   const parseQuantityFromSpec = (spec) => {
@@ -53,45 +55,112 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
   // Sync state whenever selected enquiry changes
   useEffect(() => {
     if (enquiry) {
-      setJobTitle(enquiry.job_specification || enquiry.job_name || 'Commercial Print Job');
-      const initialQty = enquiry.quantity || parseQuantityFromSpec(enquiry.job_specification);
+      const title = enquiry.job_name || enquiry.job_title || enquiry.job_specification || 'Commercial Print Job';
+      setJobTitle(title);
+
+      // 1. Quantity: structured field first, fallback to regex parse
+      const initialQty = Number(enquiry.quantity) > 0 
+        ? Number(enquiry.quantity) 
+        : parseQuantityFromSpec(enquiry.job_specification);
       setQuantity(initialQty);
 
-      // Guess category from job_specification
-      const spec = (enquiry.job_specification || '').toLowerCase();
-      if (spec.includes('sticker')) setPrintCategory('Stickers');
-      else if (spec.includes('book') || spec.includes('pages')) setPrintCategory('Book');
-      else if (spec.includes('card') || spec.includes('visiting') || spec.includes('vc')) setPrintCategory('Cards');
-      else if (spec.includes('letter') || spec.includes('bill')) setPrintCategory('Stationery');
-      else if (spec.includes('box') || spec.includes('packaging')) setPrintCategory('Packaging');
+      // 2. Guess print category from job specifications, name, and brief
+      const spec = `${enquiry.job_specification || ''} ${enquiry.job_name || ''} ${enquiry.job_brief || ''}`.toLowerCase();
+      if (spec.includes('sticker') || spec.includes('label')) setPrintCategory('Stickers');
+      else if (spec.includes('book') || spec.includes('pages') || spec.includes('publication') || spec.includes('catalogue')) setPrintCategory('Book');
+      else if (spec.includes('card') || spec.includes('visiting') || spec.includes('vc') || spec.includes('tag')) setPrintCategory('Cards');
+      else if (spec.includes('letter') || spec.includes('bill') || spec.includes('stationery')) setPrintCategory('Stationery');
+      else if (spec.includes('box') || spec.includes('packaging') || spec.includes('carton')) setPrintCategory('Packaging');
       else if (spec.includes('poster')) setPrintCategory('Poster');
+      else if (spec.includes('flyer') || spec.includes('leaflet') || spec.includes('pamphlet')) setPrintCategory('Flyer');
       else setPrintCategory('Brochure');
 
-      // Colors
-      if (spec.includes('s/s') || spec.includes('single side') || spec.includes('1+0')) {
-        setColorFront(4);
-        setColorBack(0);
-      } else if (spec.includes('1+1') || spec.includes('b/w') || spec.includes('black')) {
+      // 3. Colors from structured enquiry fields (enquiry.color, enquiry.printing_type)
+      const printingType = (enquiry.printing_type || '').toLowerCase();
+      const isSingleSide = printingType.includes('single') || printingType.includes('1-side') || spec.includes('s/s') || spec.includes('single side') || spec.includes('1+0');
+      const colorStr = (enquiry.color || '').toLowerCase();
+
+      if (colorStr.includes('single color') || colorStr.includes('black') || spec.includes('1+1') || spec.includes('b/w')) {
         setColorFront(1);
-        setColorBack(1);
+        setColorBack(isSingleSide ? 0 : 1);
+      } else if (colorStr.includes('2-color') || spec.includes('2+0') || spec.includes('2+2')) {
+        setColorFront(2);
+        setColorBack(isSingleSide ? 0 : 2);
       } else {
         setColorFront(4);
-        setColorBack(4);
+        setColorBack(isSingleSide ? 0 : 4);
       }
 
-      // Paper
-      if (spec.includes('300') || spec.includes('art card')) {
+      // 4. Paper Substrate from structured enquiry.paper
+      const paperStr = (enquiry.paper || '').toLowerCase();
+      if (paperStr.includes('300') || spec.includes('300') || paperStr.includes('art card')) {
         setPaperType('300 GSM Premium Art Card');
         setPaperRatePerReam(2200);
-      } else if (spec.includes('cromo') || spec.includes('sticker')) {
+      } else if (paperStr.includes('170') || spec.includes('170')) {
+        setPaperType('170 GSM Matte Art Paper');
+        setPaperRatePerReam(1750);
+      } else if (paperStr.includes('cromo') || paperStr.includes('sticker') || spec.includes('cromo') || spec.includes('sticker')) {
         setPaperType('Self-Adhesive Chromo Sticker Sheet');
         setPaperRatePerReam(1850);
-      } else if (spec.includes('maplitho') || spec.includes('bond') || spec.includes('80')) {
+      } else if (paperStr.includes('80') || paperStr.includes('maplitho') || paperStr.includes('bond') || spec.includes('maplitho') || spec.includes('bond')) {
         setPaperType('80 GSM Sunshine Maplitho');
         setPaperRatePerReam(980);
+      } else if (paperStr.includes('250') || spec.includes('250') || paperStr.includes('duplex')) {
+        setPaperType('250 GSM Duplex Board');
+        setPaperRatePerReam(1900);
       } else {
         setPaperType('130 GSM Gloss Art Paper');
         setPaperRatePerReam(1450);
+      }
+
+      // 5. Sheet Size from structured enquiry.size
+      const sizeStr = (enquiry.size || '').toLowerCase();
+      if (sizeStr.includes('12" x 18"') || sizeStr.includes('12 x 18') || sizeStr.includes('digital sheet')) {
+        setSheetSize('12" x 18"');
+      } else if (sizeStr.includes('18" x 23"') || sizeStr.includes('crown')) {
+        setSheetSize('18" x 23"');
+      } else if (sizeStr.includes('20" x 30"') || sizeStr.includes('demy')) {
+        setSheetSize('20" x 30"');
+      } else if (sizeStr.includes('28" x 40"')) {
+        setSheetSize('28" x 40"');
+      } else {
+        setSheetSize('23" x 36"');
+      }
+
+      // 6. Target Machine suggestion
+      const jobTypes = Array.isArray(enquiry.job_types) ? enquiry.job_types.join(' ').toLowerCase() : String(enquiry.job_types || '').toLowerCase();
+      if (jobTypes.includes('digital') || initialQty <= 500) {
+        setTargetMachine('KMC4080 Digital');
+      } else if (initialQty >= 5000) {
+        setTargetMachine('Lithrone 26');
+      } else {
+        setTargetMachine('Ryobi 660');
+      }
+
+      // 7. Finishing & Bindery from structured enquiry.finishing array / string
+      let finishingText = '';
+      if (Array.isArray(enquiry.finishing) && enquiry.finishing.length > 0) {
+        finishingText = enquiry.finishing.join(', ');
+      } else if (typeof enquiry.finishing === 'string' && enquiry.finishing.trim()) {
+        finishingText = enquiry.finishing.trim();
+      }
+      if (enquiry.other_finishing?.trim()) {
+        finishingText = finishingText ? `${finishingText}, ${enquiry.other_finishing.trim()}` : enquiry.other_finishing.trim();
+      }
+      if (finishingText) {
+        setFinishingSpec(finishingText);
+      } else {
+        setFinishingSpec('Thermal Matte Lamination, 3-Side Trim');
+      }
+
+      // 8. Priority / Turnaround from structured enquiry.urgency / enquiry.priority
+      const urgencyStr = (enquiry.urgency || enquiry.priority || '').toLowerCase();
+      if (urgencyStr.includes('urgent') || urgencyStr.includes('rush') || urgencyStr.includes('express')) {
+        setPriority('Urgent');
+      } else if (urgencyStr.includes('high')) {
+        setPriority('High');
+      } else {
+        setPriority('Normal');
       }
     }
   }, [enquiry]);
@@ -151,6 +220,10 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
       onApplyQuote(totalEstimatedPrice, {
         quantity,
         paperType,
+        sheetSize,
+        colorSpec: `${colorFront}/${colorBack} CMYK`,
+        targetMachine,
+        finishingSpec,
         totalEstimatedPrice,
         plateCount,
         priority,
@@ -165,7 +238,8 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
   if (!isOpen || !enquiry) return null;
 
   return (
-    <Modal
+    <>
+      <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={
@@ -200,10 +274,21 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
             </div>
           </div>
 
-          <div className="text-right">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">Current Amount</span>
-            <div className="text-base font-black font-mono text-slate-700">
-              {enquiry.amount > 0 ? `₹ ${Number(enquiry.amount).toLocaleString('en-IN')}` : '— Not Quoted'}
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsSpecSheetOpen(true)}
+              className="px-2.5 py-1.5 bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+              title="Pop out technical job engineering specification sheet"
+            >
+              <FileText size={13} className="text-blue-600" />
+              <span>Job Spec Sheet</span>
+            </button>
+            <div className="text-right pl-2 border-l border-blue-200">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Current Amount</span>
+              <div className="text-base font-black font-mono text-slate-700">
+                {enquiry.amount > 0 ? `₹ ${Number(enquiry.amount).toLocaleString('en-IN')}` : '— Not Quoted'}
+              </div>
             </div>
           </div>
         </div>
@@ -502,5 +587,12 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
         </div>
       </form>
     </Modal>
+
+    <TechnicalSpecSheetModal
+      isOpen={isSpecSheetOpen}
+      onClose={() => setIsSpecSheetOpen(false)}
+      entity={enquiry}
+    />
+  </>
   );
 };

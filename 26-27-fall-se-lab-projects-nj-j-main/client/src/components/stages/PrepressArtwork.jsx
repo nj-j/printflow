@@ -30,10 +30,12 @@ import {
   Flag,
   ArrowRight,
   AlertTriangle,
+  Zap,
   X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
+import { RushBadge } from '../common/RushBadge';
 
 export const PrepressArtwork = () => {
   const {
@@ -41,6 +43,9 @@ export const PrepressArtwork = () => {
     updatePrepressJob,
     jobOrders,
     setJobOrders,
+    enquiries,
+    salesBookings,
+    resolveJobRushStatus,
     advanceJobStage,
     setSelectedJobForModal,
     activeSubTab,
@@ -83,7 +88,7 @@ export const PrepressArtwork = () => {
   const getInputs = (jobId) => {
     const job = prepressJobs.find(p => p.id === jobId);
     const matched = jobOrders.find(j => j.job_ticket_number === job?.job_ticket_number);
-    const defaultStage = matched?.current_stage === 'PlateMaking' ? 'PressRun' : (job?.production_release_authorized ? 'PressRun' : 'PlateMaking');
+    const defaultStage = 'PressRun';
     return cardInputs[jobId] || {
       hours: '1.0',
       comment: '',
@@ -130,18 +135,43 @@ export const PrepressArtwork = () => {
     setTimeout(() => setFeedbackToast(null), 3000);
   };
 
-  const preflightCount = prepressJobs.filter(j => !j.production_release_authorized || j.revision_count > 1).length;
-  const pendingProofsCount = prepressJobs.filter(p => !p.production_release_authorized).length;
-  const ctpReadyCount = prepressJobs.filter(p => p.production_release_authorized).length;
+  const isJobCompletedInPrepress = (job) => {
+    if (!job) return false;
+    if (job.released_to_press) return true;
+    const linkedJob = jobOrders.find(j => j.job_ticket_number === job.job_ticket_number);
+    if (
+      linkedJob?.current_stage === 'PressRun' ||
+      linkedJob?.current_stage === 'FinishingQC' ||
+      linkedJob?.current_stage === 'DispatchReady' ||
+      linkedJob?.current_stage === 'Completed'
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  const getJobIsRush = (job) => resolveJobRushStatus(job);
+
+  const activePrepressJobs = prepressJobs.filter(j => !isJobCompletedInPrepress(j));
+  const completedPrepressJobs = prepressJobs.filter(j => isJobCompletedInPrepress(j));
+  const preflightCount = prepressJobs.filter(j => !isJobCompletedInPrepress(j) && (!j.production_release_authorized || j.revision_count > 1)).length;
+  const pendingProofsCount = prepressJobs.filter(p => !isJobCompletedInPrepress(p) && !p.production_release_authorized).length;
 
   // Filter jobs based on sub-tab, artwork type, and search query
   const filtered = prepressJobs.filter(j => {
-    if (currentSubTab === 'preflight') {
-      if (j.production_release_authorized && j.revision_count <= 1) return false;
-    } else if (currentSubTab === 'proof_signoff') {
-      if (j.production_release_authorized) return false;
-    } else if (currentSubTab === 'ctp') {
-      if (!j.production_release_authorized) return false;
+    const isCompleted = isJobCompletedInPrepress(j);
+
+    if (currentSubTab === 'completed') {
+      if (!isCompleted) return false;
+    } else {
+      // Completed jobs are removed from active Prepress terminal
+      if (isCompleted) return false;
+
+      if (currentSubTab === 'preflight') {
+        if (j.production_release_authorized && j.revision_count <= 1) return false;
+      } else if (currentSubTab === 'proof_signoff') {
+        if (j.production_release_authorized) return false;
+      }
     }
 
     const q = searchQuery.toLowerCase().trim();
@@ -152,6 +182,12 @@ export const PrepressArtwork = () => {
       j.notes?.toLowerCase().includes(q);
 
     return matchesSearch;
+  }).sort((a, b) => {
+    const aRush = getJobIsRush(a);
+    const bRush = getJobIsRush(b);
+    if (aRush && !bRush) return -1;
+    if (!aRush && bRush) return 1;
+    return 0;
   });
 
   // Helper to dynamically retrieve the latest note or comment
@@ -211,7 +247,7 @@ export const PrepressArtwork = () => {
         paper_details: '130 GSM Gloss Art Paper (23" x 36") - 6.5 Reams',
         color_spec: '4/4 Front & Back (Process CMYK)',
         finishing_spec: 'Thermal Matte Lamination, Center Stitch, 3-Side Trim',
-        current_stage: job.production_release_authorized ? 'PlateMaking' : 'DesignProofing',
+        current_stage: job.production_release_authorized ? 'PressRun' : 'DesignProofing',
         priority: 'Normal',
         notes: activeNote || job.notes,
         last_note: activeNote || job.notes,
@@ -281,7 +317,7 @@ export const PrepressArtwork = () => {
       id: 'all',
       label: 'All Artwork Jobs',
       icon: Palette,
-      badge: `${prepressJobs.length} Files`,
+      badge: `${activePrepressJobs.length} Files`,
       badgeColor: 'bg-blue-100 text-blue-700'
     },
     {
@@ -299,11 +335,11 @@ export const PrepressArtwork = () => {
       badgeColor: 'bg-amber-100 text-amber-800'
     },
     {
-      id: 'ctp',
-      label: 'CTP Output',
+      id: 'completed',
+      label: 'Released to Press',
       icon: CheckCircle2,
-      badge: `${ctpReadyCount} Plates Exposed`,
-      badgeColor: 'bg-emerald-100 text-emerald-800'
+      badge: completedPrepressJobs.length > 0 ? `${completedPrepressJobs.length} Released` : null,
+      badgeColor: 'bg-slate-100 text-slate-700'
     }
   ];
 
@@ -336,16 +372,40 @@ export const PrepressArtwork = () => {
     updatePrepressJob(job.id, {
       customer_approval_status: 'Approved',
       production_release_authorized: true,
+      released_to_press: true,
       ctp_plates_generated: 4,
       approved_date: new Date().toISOString(),
       approval_mode: 'Digital Sign-Off Verified'
     });
-    // Advance linked job order
+    // Advance linked job order directly to PressRun
     const matched = jobOrders.find(j => j.job_ticket_number === job.job_ticket_number);
     if (matched) {
-      advanceJobStage(matched.id, 'PlateMaking', 'CTP Plates authorized from Prepress Studio.');
+      advanceJobStage(matched.id, 'PressRun', 'Artwork approved and released directly to Press Terminal.');
+    } else {
+      const newJob = {
+        id: `job-${Date.now()}`,
+        job_ticket_number: job.job_ticket_number,
+        quote_id: `q-${Date.now()}`,
+        customer_id: `cust-${Date.now()}`,
+        customer_name: job.customer_name,
+        job_title: job.job_title || `${job.customer_name} Commercial Print Order`,
+        production_type: 'Offset',
+        print_quantity: 3000,
+        paper_details: '130 GSM Gloss Art Paper (23" x 36") - 6.5 Reams',
+        color_spec: '4/4 Front & Back (Process CMYK)',
+        finishing_spec: 'Thermal Matte Lamination, Center Stitch, 3-Side Trim',
+        current_stage: 'PressRun',
+        priority: job.is_rush_order ? 'Urgent' : 'Normal',
+        is_rush_order: !!job.is_rush_order,
+        queue_position: jobOrders.length + 1,
+        assigned_press_machine: 'Komori Lithrone GL-40 (5-Color + Coater)',
+        assigned_operator: 'Rajesh Nair',
+        created_at: new Date().toISOString(),
+        target_completion_date: new Date(Date.now() + 86400000 * 2).toISOString()
+      };
+      setJobOrders(prev => [newJob, ...prev]);
     }
-    showNotification(`Artwork ${job.job_ticket_number} approved! 4 CTP Plates queued for press release.`);
+    showNotification(`Artwork ${job.job_ticket_number} approved! Sent directly to Press Terminal.`);
   };
 
   const handleSendToPress = (job) => {
@@ -409,7 +469,7 @@ export const PrepressArtwork = () => {
     const hrs = parseFloat(inputs.hours) || 0;
     const comment = inputs.comment.trim();
     const matched = jobOrders.find(j => j.job_ticket_number === job.job_ticket_number);
-    const targetStage = inputs.targetStage || (matched?.current_stage === 'PlateMaking' ? 'PressRun' : 'PlateMaking');
+    const targetStage = inputs.targetStage || 'PressRun';
 
     const newHours = (job.hours_worked || 0) + hrs;
     const newCommentObj = comment ? {
@@ -427,14 +487,37 @@ export const PrepressArtwork = () => {
       comments: updatedComments,
       notes: comment || job.notes,
       last_note: comment || job.last_note || job.notes,
-      production_release_authorized: targetStage === 'PlateMaking' || targetStage === 'PressRun' ? true : job.production_release_authorized,
+      production_release_authorized: targetStage === 'PressRun' ? true : job.production_release_authorized,
       released_to_press: targetStage === 'PressRun' ? true : job.released_to_press,
-      ctp_plates_generated: targetStage === 'PlateMaking' || targetStage === 'PressRun' ? 4 : job.ctp_plates_generated
+      ctp_plates_generated: 4
     });
 
     // Also advance linked production planning job if available
     if (matched) {
       advanceJobStage(matched.id, targetStage, comment || `Prepress handoff by ${job.assigned_designer}`, hrs);
+    } else if (targetStage === 'PressRun') {
+      const newJob = {
+        id: `job-${Date.now()}`,
+        job_ticket_number: job.job_ticket_number,
+        quote_id: `q-${Date.now()}`,
+        customer_id: `cust-${Date.now()}`,
+        customer_name: job.customer_name,
+        job_title: job.job_title || `${job.customer_name} Commercial Print Order`,
+        production_type: 'Offset',
+        print_quantity: 3000,
+        paper_details: '130 GSM Gloss Art Paper (23" x 36") - 6.5 Reams',
+        color_spec: '4/4 Front & Back (Process CMYK)',
+        finishing_spec: 'Thermal Matte Lamination, Center Stitch, 3-Side Trim',
+        current_stage: 'PressRun',
+        priority: job.is_rush_order ? 'Urgent' : 'Normal',
+        is_rush_order: !!job.is_rush_order,
+        queue_position: jobOrders.length + 1,
+        assigned_press_machine: 'Komori Lithrone GL-40 (5-Color + Coater)',
+        assigned_operator: 'Rajesh Nair',
+        created_at: new Date().toISOString(),
+        target_completion_date: new Date(Date.now() + 86400000 * 2).toISOString()
+      };
+      setJobOrders(prev => [newJob, ...prev]);
     }
 
     showNotification(`Logged ${hrs}h and advanced ${job.job_ticket_number} to ${targetStage}!`);
@@ -703,12 +786,15 @@ export const PrepressArtwork = () => {
                       </td>
                     </tr>
                   ) : (
-                    filtered.map(job => (
-                      <tr key={job.id} className="hover:bg-slate-50 transition">
-                        <td className="p-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-slate-900">{job.job_ticket_number}</span>
-                            {(job.qc_flagged || issues.some(i => i.job_ticket_number === job.job_ticket_number && !i.resolved)) && (
+                    filtered.map(job => {
+                      const isRush = getJobIsRush(job);
+                      return (
+                        <tr key={job.id} className={`hover:bg-slate-50 transition ${isRush ? 'bg-rose-50/40 border-l-4 border-l-rose-500' : ''}`}>
+                          <td className="p-2.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono font-bold text-slate-900">{job.job_ticket_number}</span>
+                              {isRush && <RushBadge size="xs" />}
+                              {(job.qc_flagged || issues.some(i => i.job_ticket_number === job.job_ticket_number && !i.resolved)) && (
                               <button
                                 type="button"
                                 onClick={() => setSelectedQCJob(job)}
@@ -875,8 +961,9 @@ export const PrepressArtwork = () => {
                           </div>
                         </td>
                       </tr>
-                    ))
-                  )}
+                    );
+                  })
+                )}
                 </tbody>
               </table>
             </div>
@@ -1009,6 +1096,7 @@ export const PrepressArtwork = () => {
                           const isApproved = job.customer_approval_status === 'Approved';
                           const isAuthorized = job.production_release_authorized;
                           const isExpanded = expandedCardIds.has(job.id);
+                          const isRush = getJobIsRush(job);
                           const inputs = getInputs(job.id);
 
                           const formattedDate = job.proof_shared_date
@@ -1024,7 +1112,9 @@ export const PrepressArtwork = () => {
                               key={job.id}
                               onClick={() => toggleExpandCard(job.id)}
                               className={`bg-white border rounded-lg p-2.5 transition flex flex-col gap-1.5 select-none cursor-pointer group ${
-                                isExpanded
+                                isRush
+                                  ? 'urgent-glow-card'
+                                  : isExpanded
                                   ? 'border-purple-400 shadow-md ring-1 ring-purple-300'
                                   : 'border-slate-200 shadow-xs hover:border-slate-400 hover:shadow-xs'
                               }`}
@@ -1032,13 +1122,14 @@ export const PrepressArtwork = () => {
                             >
                               {/* Top Bar: Ticket No, Current Version & Expand Chevron */}
                               <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                                     {job.job_ticket_number}
                                   </span>
                                   <span className="font-mono font-bold text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">
                                     {job.current_version}
                                   </span>
+                                  {isRush && <RushBadge size="xs" />}
                                   {(job.qc_flagged || issues.some(i => i.job_ticket_number === job.job_ticket_number && !i.resolved)) && (
                                     <button
                                       type="button"
@@ -1142,7 +1233,7 @@ export const PrepressArtwork = () => {
                                             title="Approve & Generate CTP Plates"
                                           >
                                             <CheckCircle2 size={11} />
-                                            <span>Approve & Release</span>
+                                            <span>Approve & Send to Press</span>
                                           </button>
                                         )}
                                       </div>
@@ -1323,8 +1414,7 @@ export const PrepressArtwork = () => {
                                           onChange={(e) => updateInput(job.id, 'targetStage', e.target.value)}
                                           className="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold text-purple-900 text-[10px] focus:outline-none"
                                         >
-                                          <option value="PressRun">3. Offset Press Run (Press Terminal)</option>
-                                          <option value="PlateMaking">2. CTP Plate Making (Output)</option>
+                                          <option value="PressRun">2. Offset Press Run (Press Terminal)</option>
                                           <option value="DesignProofing">1. Revert to Pre-Flight</option>
                                         </select>
                                       </div>
@@ -1421,7 +1511,7 @@ export const PrepressArtwork = () => {
                                             className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded text-[10px] transition shadow-xs flex items-center justify-center gap-1 cursor-pointer"
                                           >
                                             <CheckCircle2 size={12} />
-                                            <span>Approve & Release CTP</span>
+                                            <span>Approve & Send to Press</span>
                                           </button>
                                         );
                                       })()}
@@ -1516,7 +1606,7 @@ export const PrepressArtwork = () => {
                   </div>
                   <div className="flex flex-wrap sm:flex-col items-start sm:items-end gap-1.5 text-[11px]">
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
-                      Stage: {activeJob.current_stage || (activeJob.production_release_authorized ? 'PlateMaking' : 'DesignProofing')}
+                      Stage: {activeJob.current_stage || (activeJob.production_release_authorized ? 'PressRun' : 'DesignProofing')}
                     </span>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                       isUrgent ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700'

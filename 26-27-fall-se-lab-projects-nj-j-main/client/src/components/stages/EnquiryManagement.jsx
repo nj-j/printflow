@@ -38,6 +38,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { EnquiryFormModal } from '../common/EnquiryFormModal';
 import { QuoteEstimatorModal } from '../common/QuoteEstimatorModal';
+import { TechnicalSpecSheetModal } from '../common/TechnicalSpecSheetModal';
 
 export const STAGE_OPTIONS = [
   'Order Desk',
@@ -114,6 +115,7 @@ export const EnquiryManagement = () => {
   const [editingEnquiry, setEditingEnquiry] = useState(null);
   const [selectedEnquiryForQuote, setSelectedEnquiryForQuote] = useState(null);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [specSheetModalEnq, setSpecSheetModalEnq] = useState(null);
   const [toastNotification, setToastNotification] = useState(null);
   const [expandedRowIds, setExpandedRowIds] = useState(new Set());
 
@@ -163,21 +165,37 @@ export const EnquiryManagement = () => {
     setIsQuoteModalOpen(true);
   };
 
-  const handleApplyQuote = (newAmount, quoteDetails) => {
+  const handleApplyQuote = (newAmount, quoteDetails = {}) => {
     if (!selectedEnquiryForQuote) return;
+
+    const isRush = (quoteDetails.priority === 'Urgent') || (selectedEnquiryForQuote.priority === 'Urgent') || (selectedEnquiryForQuote.urgency?.toLowerCase().includes('urgent'));
+    const resolvedPriority = isRush ? 'Urgent' : (quoteDetails.priority || selectedEnquiryForQuote.priority || 'Normal');
+
     updateEnquiry(selectedEnquiryForQuote.id, {
       amount: newAmount,
+      estimated_amount: newAmount,
+      final_quote: newAmount,
+      total_amount: newAmount,
       amount_note: `Quoted: ₹${newAmount.toLocaleString('en-IN')}`,
       costing_status: 'Costed',
       quotation_generated: true,
-      current_stage: 'Costing'
+      current_stage: 'Costing',
+      quantity: quoteDetails.quantity || selectedEnquiryForQuote.quantity,
+      paper: quoteDetails.paperType || selectedEnquiryForQuote.paper,
+      size: quoteDetails.sheetSize || selectedEnquiryForQuote.size,
+      color_spec: quoteDetails.colorSpec || selectedEnquiryForQuote.color,
+      finishing_spec: quoteDetails.finishingSpec || selectedEnquiryForQuote.finishing,
+      target_machine: quoteDetails.targetMachine,
+      job_name: quoteDetails.jobTitle || selectedEnquiryForQuote.job_name || selectedEnquiryForQuote.job_specification,
+      priority: resolvedPriority,
+      is_rush_order: isRush
     });
 
     let createdQuoteId = null;
     if (quoteDetails?.saveToRegister) {
       const q = createQuote({
         customer_name: selectedEnquiryForQuote.customer_name,
-        priority: quoteDetails.priority || 'Normal',
+        priority: resolvedPriority,
         total_estimated_price: newAmount,
         valid_until: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split('T')[0],
         items: [
@@ -210,7 +228,7 @@ export const EnquiryManagement = () => {
         ? `DN-${selectedEnquiryForQuote.dn_no}` 
         : (selectedEnquiryForQuote.enquiry_no || selectedEnquiryForQuote.id),
       arc_number: null,
-      job_title: quoteDetails?.jobTitle || selectedEnquiryForQuote.job_name || selectedEnquiryForQuote.job_specification || 'Commercial Print Job',
+      job_title: quoteDetails.jobTitle || selectedEnquiryForQuote.job_name || selectedEnquiryForQuote.job_specification || 'Commercial Print Job',
       confirmation_channel: selectedEnquiryForQuote.source || 'Walk-in',
       confirmation_date: new Date().toISOString().split('T')[0],
       order_total: Number(newAmount),
@@ -220,6 +238,8 @@ export const EnquiryManagement = () => {
       booking_status: isBooked ? 'Booked' : 'Awaiting Advance',
       production_release: isBooked,
       refund_applicable: false,
+      priority: resolvedPriority,
+      is_rush_order: isRush,
       prepress: selectedEnquiryForQuote.prepress && selectedEnquiryForQuote.prepress !== '-' ? selectedEnquiryForQuote.prepress : 'Aruna'
     });
 
@@ -693,9 +713,20 @@ export const EnquiryManagement = () => {
                               </td>
                               <td className="text-right font-mono font-bold whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-1.5">
-                                  <span className={enq.amount > 0 ? "text-slate-900" : "text-slate-400"}>
+                                  <span className={enq.amount > 0 ? "text-slate-900 mr-1" : "text-slate-400 mr-1"}>
                                     {enq.amount > 0 ? `₹ ${Number(enq.amount).toLocaleString('en-IN')}` : '—'}
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSpecSheetModalEnq(enq);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-sans font-semibold flex items-center gap-1 shadow-2xs hover:shadow transition cursor-pointer"
+                                    title={`View technical job spec sheet for ${enq.customer_name}`}
+                                  >
+                                    <FileText size={12} className="text-blue-600" /> Spec Sheet
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => handleOpenQuoteModal(enq)}
@@ -741,6 +772,13 @@ export const EnquiryManagement = () => {
                                       </div>
 
                                       <div className="flex items-center gap-2 flex-wrap">
+                                        <button
+                                          type="button"
+                                          onClick={() => setSpecSheetModalEnq(enq)}
+                                          className="btn btn-xs bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-300 hover:border-blue-300 font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                        >
+                                          <FileText size={13} className="text-blue-600" /> Spec Sheet
+                                        </button>
                                         <button
                                           type="button"
                                           onClick={() => handleOpenQuoteModal(enq)}
@@ -970,6 +1008,14 @@ export const EnquiryManagement = () => {
         }}
         enquiry={selectedEnquiryForQuote}
         onApplyQuote={handleApplyQuote}
+      />
+
+      {/* Technical Spec Sheet Modal */}
+      <TechnicalSpecSheetModal
+        isOpen={!!specSheetModalEnq}
+        onClose={() => setSpecSheetModalEnq(null)}
+        entity={specSheetModalEnq}
+        onOpenQuoteEstimator={handleOpenQuoteModal}
       />
 
       {/* 10-Section Master Enquiry Form Modal */}

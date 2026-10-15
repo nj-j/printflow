@@ -14,6 +14,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { RushBadge } from '../common/RushBadge';
 
 export const FinishingOperations = () => {
   const {
@@ -24,7 +25,8 @@ export const FinishingOperations = () => {
     setActiveSubTab,
     advanceJobStage,
     openQCFlagModal,
-    issues
+    issues,
+    resolveJobRushStatus
   } = useApp();
   const [expandedOpId, setExpandedOpId] = useState(null);
   const [logInputs, setLogInputs] = useState({});
@@ -265,8 +267,11 @@ export const FinishingOperations = () => {
                         />
                       </td>
                       <td className="p-2.5 font-mono font-bold text-slate-900">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span>{op.job_ticket_number}</span>
+                          {resolveJobRushStatus(matchedJob || op) && (
+                            <RushBadge size="xs" />
+                          )}
                           {(op.qc_flagged || issues?.some(i => i.job_ticket_number === op.job_ticket_number && !i.resolved)) && (
                             <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[8px] bg-rose-600 text-white flex items-center gap-0.5 shadow-2xs">
                               <Flag size={8} /> QC
@@ -393,11 +398,14 @@ export const FinishingOperations = () => {
                                 <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
                                   <Scissors size={14} />
                                 </div>
-                                <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className="text-slate-900 font-bold">{op.job_ticket_number}</span>
-                                  <span className="text-slate-400 mx-1.5">•</span>
+                                  {resolveJobRushStatus(matchedJob || op) && (
+                                    <RushBadge size="xs" />
+                                  )}
+                                  <span className="text-slate-400 mx-1">•</span>
                                   <span className="text-slate-700">{op.activity_type}</span>
-                                  <span className="text-slate-500 font-normal text-[11px] ml-1.5">({op.workcenter})</span>
+                                  <span className="text-slate-500 font-normal text-[11px] ml-1">({op.workcenter})</span>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">

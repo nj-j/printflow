@@ -33,8 +33,8 @@ export const TripSheetModal = ({ trip, jobs, onClose }) => {
           {/* Metadata Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono">
             <div>
-              <span className="text-slate-400 text-[10px] block">Route Name</span>
-              <strong className="text-slate-900">{trip.route_name}</strong>
+              <span className="text-slate-400 text-[10px] block">Trip / Run Name</span>
+              <strong className="text-slate-900">{trip.trip_run_name || trip.route_name || 'Standard Delivery Run'}</strong>
             </div>
             <div>
               <span className="text-slate-400 text-[10px] block">Assigned Driver</span>

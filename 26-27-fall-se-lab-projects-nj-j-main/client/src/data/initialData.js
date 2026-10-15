@@ -470,7 +470,7 @@ export const INITIAL_JOB_ORDERS = [
     paper_details: '300 GSM Premium Art Card (20" x 30") - 10 Reams',
     color_spec: '4/0 Single Side CMYK + Spot Gloss Varnish',
     finishing_spec: 'Spot UV, Die Punching, Pasting',
-    current_stage: 'PlateMaking', // CTP Trendsetter Q800
+    current_stage: 'PressRun', // Komori Lithrone GL-40
     priority: 'Normal',
     is_rush_order: false,
     queue_position: 2,
@@ -550,7 +550,7 @@ export const INITIAL_WORKSTATION_LOGS = [
     job_ticket_number: 'JT-2026-001',
     operator_user_id: 'usr-3',
     operator_name: 'Kiran Verma',
-    workstation_stage: 'PlateMaking',
+    workstation_stage: 'Pre-Press',
     machine_name: 'Kodak CTP Thermal Setter',
     started_at: '2026-08-27T17:00:00Z',
     completed_at: '2026-08-27T18:15:00Z',

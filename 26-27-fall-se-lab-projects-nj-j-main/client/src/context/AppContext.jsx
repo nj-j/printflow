@@ -185,7 +185,49 @@ export const AppProvider = ({ children }) => {
 
   const [jobOrders, setJobOrders] = useState(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY}_jobs`);
-    return saved ? JSON.parse(saved) : INITIAL_JOB_ORDERS;
+    const initial = saved ? JSON.parse(saved) : INITIAL_JOB_ORDERS;
+    const savedEnqs = localStorage.getItem(`${STORAGE_KEY}_enquiries`);
+    const enqs = savedEnqs ? JSON.parse(savedEnqs) : INITIAL_ENQUIRIES;
+    const savedBookings = localStorage.getItem(`${STORAGE_KEY}_sales_bookings`);
+    const bookings = savedBookings ? JSON.parse(savedBookings) : INITIAL_SALES_BOOKINGS;
+
+    return initial.map((job, idx) => {
+      // JT-2026-001 is legitimately rush from initial seed data
+      if (job.job_ticket_number === 'JT-2026-001') return job;
+
+      const matchedEnq = enqs.find(e =>
+        e.enquiry_no === job.job_ticket_number ||
+        e.id === job.job_ticket_number ||
+        (e.dn_no && `SO-2026-${e.dn_no}` === job.job_ticket_number) ||
+        (job.customer_name && e.customer_name?.toLowerCase().trim() === job.customer_name?.toLowerCase().trim())
+      );
+      const matchedBooking = bookings.find(b =>
+        b.booking_number === job.job_ticket_number ||
+        (job.customer_name && b.customer_name?.toLowerCase().trim() === b.customer_name?.toLowerCase().trim())
+      );
+
+      const isActuallyRush = 
+        matchedEnq?.priority === 'Urgent' || 
+        matchedEnq?.is_rush_order === true || 
+        matchedBooking?.priority === 'Urgent' ||
+        matchedBooking?.is_rush_order === true;
+
+      let updatedJob = job;
+      if (job.current_stage === 'PlateMaking') {
+        updatedJob = { ...job, current_stage: 'PressRun' };
+      }
+
+      if (!isActuallyRush && (job.is_rush_order || job.priority === 'Urgent')) {
+        const correctPriority = matchedEnq?.priority || matchedBooking?.priority || 'Normal';
+        return {
+          ...updatedJob,
+          priority: correctPriority,
+          is_rush_order: false,
+          queue_position: job.queue_position === 1 ? idx + 1 : job.queue_position
+        };
+      }
+      return updatedJob;
+    });
   });
 
   const [workstationLogs, setWorkstationLogs] = useState(() => {
@@ -451,6 +493,8 @@ export const AppProvider = ({ children }) => {
             booking_status: isBooked ? 'Booked' : 'Awaiting Advance',
             production_release: isBooked,
             refund_applicable: false,
+            priority: enq.priority || 'Normal',
+            is_rush_order: enq.priority === 'Urgent' || enq.is_rush_order === true,
             prepress: enq.prepress && enq.prepress !== '-' ? enq.prepress : 'Aruna',
             created_at: new Date().toISOString()
           });
@@ -991,8 +1035,8 @@ export const AppProvider = ({ children }) => {
       } : null;
       const updatedComments = newCommentObj ? [...(job.comments || []), newCommentObj] : (job.comments || []);
 
-      // When advancing into PressRun, trigger Phase 2 Material Deduction
-      if (nextStage === 'PressRun') {
+      // When advancing into PressRun or Press, trigger Phase 2 Material Deduction
+      if (nextStage === 'PressRun' || nextStage === 'Press') {
         setMaterialReservations(resPrev => resPrev.map(res => {
           if (res.job_order_id === jobId && !res.is_deducted) {
             // Deduct from inventory on hand
@@ -1012,6 +1056,8 @@ export const AppProvider = ({ children }) => {
       return {
         ...job,
         current_stage: nextStage,
+        qc_flagged: false,
+        returned_from_qc: false,
         total_hours_worked: currentTotalHours,
         comments: updatedComments,
         last_comment: cleanNotes || job.last_comment,
@@ -1061,11 +1107,11 @@ export const AppProvider = ({ children }) => {
         approved_at: status === 'Approved' ? new Date().toISOString() : p.approved_at,
       };
 
-      // If approved, advance corresponding job to PlateMaking
+      // If approved, advance corresponding job directly to PressRun
       if (status === 'Approved') {
         const job = jobOrders.find(j => j.job_ticket_number === p.job_ticket_number);
         if (job) {
-          advanceJobStage(job.id, 'PlateMaking', 'Design proof signed off. Ready for CTP.');
+          advanceJobStage(job.id, 'PressRun', 'Design proof signed off. Ready for Press.');
         }
       }
 
@@ -1358,11 +1404,125 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // Universal Rewind Job Stage / Return for QC Rework
+  const rewindJobStage = (jobId, targetStage, returnReason = '') => {
+    const cleanReason = (returnReason || 'Job sent back from QC for rework / plate remake / correction.').trim();
+    let targetTicket = null;
+    let targetJob = null;
+
+    // Rewind job in jobOrders pipeline
+    setJobOrders(prev => prev.map(j => {
+      if (j.id === jobId || j.job_ticket_number === jobId) {
+        targetJob = j;
+        targetTicket = j.job_ticket_number;
+        const returnComment = {
+          id: `com-${Date.now()}`,
+          text: `[RETURNED FROM QC to ${targetStage}]: ${cleanReason}`,
+          author: activeUser.full_name,
+          stage: targetStage,
+          timestamp: new Date().toISOString()
+        };
+        return {
+          ...j,
+          current_stage: targetStage,
+          qc_flagged: true,
+          returned_from_qc: true,
+          last_qc_action: 'SentBack',
+          last_qc_return_reason: cleanReason,
+          comments: [...(j.comments || []), returnComment],
+          last_note: `[RETURNED FROM QC]: ${cleanReason}`,
+          notes: `[RETURNED FROM QC]: ${cleanReason}`
+        };
+      }
+      return j;
+    }));
+
+    const ticket = targetTicket || jobId;
+    const jobObj = targetJob || jobOrders.find(j => j.id === jobId || j.job_ticket_number === ticket);
+    if (jobObj) {
+      setWorkstationLogs(prev => [{
+        id: `log-${Date.now()}`,
+        job_order_id: jobObj.id,
+        job_ticket_number: jobObj.job_ticket_number,
+        operator_user_id: activeUser.id,
+        operator_name: activeUser.full_name,
+        workstation_stage: targetStage,
+        machine_name: jobObj.assigned_press_machine,
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        good_impressions: jobObj.print_quantity,
+        waste_sheets_logged: 0,
+        hours_worked: 0,
+        operator_notes: `[PIPELINE REWOUND BY QC]: Returned to ${targetStage}. Instructions: ${cleanReason}`,
+      }, ...prev]);
+    }
+
+    // If returning to Pre-press, update prepressJobs
+    if (targetStage === 'DesignProofing' || targetStage === 'Prepress' || targetStage === 'Pre-Press') {
+      setPrepressJobs(prev => prev.map(p => {
+        if (p.job_ticket_number === ticket || p.id === ticket) {
+          return {
+            ...p,
+            customer_approval_status: 'RevisionRequested',
+            production_release_authorized: false,
+            returned_from_qc: true,
+            last_note: `[RETURNED FROM QC]: ${cleanReason}`,
+            notes: `[RETURNED FROM QC]: ${cleanReason}`
+          };
+        }
+        return p;
+      }));
+    }
+
+    // If returning to Finishing, reset finishingOps status to In-Progress
+    if (targetStage === 'FinishingQC' || targetStage === 'Finishing') {
+      setFinishingOps(prev => prev.map(f => {
+        if (f.job_ticket_number === ticket || f.id === ticket) {
+          return {
+            ...f,
+            status: 'In-Progress',
+            returned_from_qc: true,
+            moved_to_qc: false
+          };
+        }
+        return f;
+      }));
+    }
+
+    // If returning to Quotation / Costing
+    if (targetStage === 'Quotation' || targetStage === 'Order Desk' || targetStage === 'Costing') {
+      setEnquiries(prev => prev.map(e => {
+        if (e.enquiry_no === ticket || e.id === ticket || (e.dn_no && `SO-2026-${e.dn_no}` === ticket) || (jobObj && e.customer_name === jobObj.customer_name)) {
+          return {
+            ...e,
+            current_stage: 'Costing',
+            costing_status: 'Costing In-Progress',
+            support_notes: `[RETURNED FROM PIPELINE]: ${cleanReason}`
+          };
+        }
+        return e;
+      }));
+    }
+
+    addAlert({
+      alert_type: 'RushOrderAlert',
+      severity: 'Critical',
+      message: `[JOB RETURNED FROM QC] Job ${ticket} sent back to [${targetStage}] for rework. Reason: ${cleanReason}`,
+    });
+
+    addNotificationLog({
+      title: `Job ${ticket} Rewound by QC`,
+      message: `Returned to ${targetStage} stage. Reason: ${cleanReason}`,
+      channel: 'App',
+      type: 'Rework',
+      status: 'Sent'
+    });
+  };
+
   // Send Back Job Card Up Production Pipeline / Back a Station
   const sendBackJobFromQC = (issueId, targetStage, returnReason = '') => {
     const cleanReason = (returnReason || 'Job sent back from QC for rework / plate remake / color correction.').trim();
     let targetTicket = null;
-    let targetJob = null;
 
     setIssues(prev => prev.map(iss => {
       if (iss.id === issueId) {
@@ -1380,98 +1540,8 @@ export const AppProvider = ({ children }) => {
       return iss;
     }));
 
-    // Rewind job in jobOrders pipeline
-    setJobOrders(prev => prev.map(j => {
-      if (j.job_ticket_number === targetTicket || j.id === targetTicket) {
-        targetJob = j;
-        const returnComment = {
-          id: `com-${Date.now()}`,
-          text: `[RETURNED FROM QC to ${targetStage}]: ${cleanReason}`,
-          author: activeUser.full_name,
-          stage: targetStage,
-          timestamp: new Date().toISOString()
-        };
-        return {
-          ...j,
-          current_stage: targetStage,
-          qc_flagged: false,
-          returned_from_qc: true,
-          last_qc_action: 'SentBack',
-          last_qc_return_reason: cleanReason,
-          comments: [...(j.comments || []), returnComment],
-          last_note: `[RETURNED FROM QC]: ${cleanReason}`,
-          notes: `[RETURNED FROM QC]: ${cleanReason}`
-        };
-      }
-      return j;
-    }));
-
-    // Log Workstation Return event
     if (targetTicket) {
-      const jobObj = targetJob || jobOrders.find(j => j.job_ticket_number === targetTicket);
-      if (jobObj) {
-        setWorkstationLogs(prev => [{
-          id: `log-${Date.now()}`,
-          job_order_id: jobObj.id,
-          job_ticket_number: jobObj.job_ticket_number,
-          operator_user_id: activeUser.id,
-          operator_name: activeUser.full_name,
-          workstation_stage: targetStage,
-          machine_name: jobObj.assigned_press_machine,
-          started_at: new Date().toISOString(),
-          completed_at: null,
-          good_impressions: jobObj.print_quantity,
-          waste_sheets_logged: 0,
-          hours_worked: 0,
-          operator_notes: `[PIPELINE REWOUND BY QC]: Returned to ${targetStage}. Instructions: ${cleanReason}`,
-        }, ...prev]);
-      }
-
-      // If returning to Pre-press, update prepressJobs
-      if (targetStage === 'DesignProofing') {
-        setPrepressJobs(prev => prev.map(p => {
-          if (p.job_ticket_number === targetTicket) {
-            return {
-              ...p,
-              customer_approval_status: 'RevisionRequested',
-              production_release_authorized: false,
-              returned_from_qc: true,
-              last_note: `[RETURNED FROM QC]: ${cleanReason}`,
-              notes: `[RETURNED FROM QC]: ${cleanReason}`
-            };
-          }
-          return p;
-        }));
-      }
-
-      // If returning to Finishing, reset finishingOps status to In-Progress
-      if (targetStage === 'FinishingQC') {
-        setFinishingOps(prev => prev.map(f => {
-          if (f.job_ticket_number === targetTicket) {
-            return {
-              ...f,
-              status: 'In-Progress',
-              returned_from_qc: true,
-              moved_to_qc: false
-            };
-          }
-          return f;
-        }));
-      }
-
-      addAlert({
-        alert_type: 'RushOrderAlert',
-        severity: 'Critical',
-        message: `[JOB RETURNED FROM QC] Job ${targetTicket} sent back to [${targetStage}] for rework. Reason: ${cleanReason}`,
-      });
-
-      addNotificationLog({
-        title: `Job ${targetTicket} Rewound by QC`,
-        message: `Returned to ${targetStage} stage. Reason: ${cleanReason}`,
-        channel: 'App',
-        type: 'Rework',
-        status: 'Sent'
-      });
+      rewindJobStage(targetTicket, targetStage, cleanReason);
     }
   };
 
@@ -1690,6 +1760,13 @@ export const AppProvider = ({ children }) => {
     }
 
     // 2. Add or update job in jobOrders with current_stage: 'Pre-Press'
+    const isRush = (bookedOrder.is_rush_order === true) ||
+                   (bookedOrder.priority === 'Urgent') ||
+                   (matchedEnq?.priority === 'Urgent') ||
+                   (matchedEnq?.is_rush_order === true);
+    const orderPriority = isRush ? 'Urgent' : (bookedOrder.priority || matchedEnq?.priority || 'Normal');
+    const queuePos = isRush ? 1 : (jobOrders.length + 1);
+
     const existingJob = jobOrders.find(j => j.job_ticket_number === bookedOrder.booking_number);
     if (!existingJob) {
       const newJob = {
@@ -1705,9 +1782,9 @@ export const AppProvider = ({ children }) => {
         color_spec: '4/4 Front & Back (Process CMYK)',
         finishing_spec: 'Thermal Matte Lamination, Die-Punch & Pasting',
         current_stage: 'Pre-Press',
-        priority: 'Urgent',
-        is_rush_order: true,
-        queue_position: 1,
+        priority: orderPriority,
+        is_rush_order: isRush,
+        queue_position: queuePos,
         total_cost: bookedOrder.order_total,
         balance_due: bookedOrder.balance_pending,
         advance_paid: adv,
@@ -1720,6 +1797,8 @@ export const AppProvider = ({ children }) => {
       setJobOrders(prev => prev.map(j => j.job_ticket_number === bookedOrder.booking_number ? {
         ...j,
         current_stage: 'Pre-Press',
+        priority: orderPriority,
+        is_rush_order: isRush,
         advance_paid: adv,
         balance_due: bookedOrder.balance_pending
       } : j));
@@ -1870,9 +1949,36 @@ export const AppProvider = ({ children }) => {
     });
   };
 
+  // Central Authoritative Rush Status Resolver
+  const resolveJobRushStatus = (entity) => {
+    if (!entity) return false;
+    if (entity.job_ticket_number === 'JT-2026-001') return true;
+    if (entity.is_rush_order === true || entity.priority === 'Urgent') return true;
+
+    const matchedEnq = enquiries.find(e =>
+      e.enquiry_no === entity.job_ticket_number ||
+      e.id === entity.job_ticket_number ||
+      (e.dn_no && `SO-2026-${e.dn_no}` === entity.job_ticket_number) ||
+      (entity.customer_name && e.customer_name?.toLowerCase().trim() === entity.customer_name?.toLowerCase().trim())
+    );
+    if (matchedEnq?.priority === 'Urgent' || matchedEnq?.is_rush_order === true) return true;
+
+    const matchedBooking = salesBookings.find(b =>
+      b.booking_number === entity.job_ticket_number ||
+      (entity.customer_name && b.customer_name?.toLowerCase().trim() === entity.customer_name?.toLowerCase().trim())
+    );
+    if (matchedBooking?.priority === 'Urgent' || matchedBooking?.is_rush_order === true) return true;
+
+    const matchedJob = jobOrders.find(j => j.job_ticket_number === entity.job_ticket_number);
+    if (matchedJob?.priority === 'Urgent' || matchedJob?.is_rush_order === true) return true;
+
+    return false;
+  };
+
   return (
     <AppContext.Provider
       value={{
+        resolveJobRushStatus,
         activeUser,
         switchUser,
         activeTab,
@@ -1998,6 +2104,7 @@ export const AppProvider = ({ children }) => {
         raiseQCFlag,
         markQCFlagFixed,
         sendBackJobFromQC,
+        rewindJobStage,
       }}
     >
       {children}

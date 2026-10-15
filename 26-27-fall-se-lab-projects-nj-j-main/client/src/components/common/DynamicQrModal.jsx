@@ -150,7 +150,7 @@ export const DynamicQrModal = () => {
     <Modal
       isOpen={!!qrModalData}
       onClose={() => setQrModalData(null)}
-      title="Record Advance / Payment Intake"
+      title={qrModalData?.title || (bookingId ? 'Record Advance Payment' : 'Record Payment')}
       maxWidth="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="p-1 space-y-4 text-xs">
@@ -195,7 +195,7 @@ export const DynamicQrModal = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block font-bold text-slate-700 mb-1">
-              Advance Amount Received (₹) <span className="text-red-500">*</span> :
+              {(bookingId || qrModalData?.isAdvance) ? 'Advance Amount Received (₹)' : 'Payment Amount Received (₹)'} <span className="text-red-500">*</span> :
             </label>
             <div className="relative">
               <span className="absolute left-3 top-2 font-mono font-bold text-slate-400">₹</span>
@@ -487,7 +487,13 @@ export const DynamicQrModal = () => {
             }`}
           >
             <CheckCircle2 size={15} />
-            <span>{isSuccess ? 'Payment Recorded!' : `Confirm Advance Payment (₹${Number(collectedAmount).toLocaleString()})`}</span>
+            <span>
+              {isSuccess
+                ? 'Payment Recorded!'
+                : (bookingId || qrModalData?.isAdvance)
+                ? `Confirm Advance Payment (₹${Number(collectedAmount).toLocaleString()})`
+                : `Confirm Payment (₹${Number(collectedAmount).toLocaleString()})`}
+            </span>
           </button>
         </div>
       </form>
