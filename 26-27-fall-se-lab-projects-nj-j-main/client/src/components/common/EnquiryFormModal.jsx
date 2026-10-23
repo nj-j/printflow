@@ -20,6 +20,7 @@ import {
   Check
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { FLEET_MACHINE_OPTIONS, resolveDefaultPressMachine } from '../../utils/machineRouting';
 
 export const STANDARD_SIZES = [
   'A4 (210 x 297 mm)',
@@ -132,6 +133,7 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
   const [currentStage, setCurrentStage] = useState(enquiryData?.current_stage || 'Order Desk');
   const [prepressAssignedTo, setPrepressAssignedTo] = useState(enquiryData?.prepress || 'Aruna');
   const [vendorOutsource, setVendorOutsource] = useState(enquiryData?.vendor || '');
+  const [assignedPressMachine, setAssignedPressMachine] = useState(enquiryData?.assigned_press_machine || enquiryData?.target_machine || '');
   const [remarks, setRemarks] = useState(enquiryData?.remarks || '');
 
   // Synchronize form fields whenever enquiryData changes or modal opens
@@ -173,6 +175,7 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
         setCurrentStage(enquiryData.current_stage || 'Order Desk');
         setPrepressAssignedTo(enquiryData.prepress || 'Aruna');
         setVendorOutsource(enquiryData.vendor || '');
+        setAssignedPressMachine(enquiryData.assigned_press_machine || enquiryData.target_machine || '');
         setRemarks(enquiryData.remarks || '');
       } else {
         setEnquiryNo(`ENQ-${Date.now().toString().slice(-6)}`);
@@ -207,6 +210,7 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
         setCurrentStage('Order Desk');
         setPrepressAssignedTo('Aruna');
         setVendorOutsource('');
+        setAssignedPressMachine('');
         setRemarks('');
       }
     }
@@ -318,6 +322,17 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
 
     const finalJobTitle = (jobTitle || '').trim() || (jobBrief || '').trim() || (resolvedJobTypes.length > 0 ? resolvedJobTypes.join(', ') : `${quantity} nos ${resolvedSize}`);
 
+    const finalMachine = assignedPressMachine
+      ? assignedPressMachine
+      : resolveDefaultPressMachine({
+          quantity,
+          production_type: resolvedJobTypes[0] || 'Offset',
+          printing_type: printingType,
+          color: colorType,
+          job_specification: finalJobTitle,
+          job_name: finalJobTitle
+        });
+
     if (onSaveEnquiry) {
       onSaveEnquiry({
         enquiry_no: enquiryNo,
@@ -358,6 +373,8 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
         current_stage: currentStage,
         prepress: prepressAssignedTo,
         vendor: vendorOutsource,
+        assigned_press_machine: finalMachine,
+        target_machine: finalMachine,
         remarks,
         advance: enquiryData?.advance || 0,
         payment_mode: enquiryData?.payment_mode || 'UPI',
@@ -1011,6 +1028,21 @@ export const EnquiryFormModal = ({ isOpen, onClose, enquiryData = null, onSaveEn
                     value={vendorOutsource}
                     onChange={(e) => setVendorOutsource(e.target.value)}
                   />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="w-32 font-bold text-slate-700">Target Machine :</label>
+                  <select
+                    className="flex-1 border-b border-slate-300 focus:border-primary outline-none py-0.5 font-bold text-slate-800"
+                    value={assignedPressMachine}
+                    onChange={(e) => setAssignedPressMachine(e.target.value)}
+                  >
+                    <option value="">Auto-Assign (Based on Qty & Specs)</option>
+                    {FLEET_MACHINE_OPTIONS.map(opt => (
+                      <option key={opt.id} value={opt.name}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>

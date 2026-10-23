@@ -39,56 +39,41 @@ import { useApp } from '../../context/AppContext';
 import { EnquiryFormModal } from '../common/EnquiryFormModal';
 import { QuoteEstimatorModal } from '../common/QuoteEstimatorModal';
 import { TechnicalSpecSheetModal } from '../common/TechnicalSpecSheetModal';
+import {
+  STAGES,
+  STAGE_CONFIG,
+  STAGE_DROPDOWN_OPTIONS,
+  normalizeStage,
+  getStageDisplay
+} from '../../utils/stageConstants';
 
-export const STAGE_OPTIONS = [
-  'Order Desk',
-  'Costing',
-  'Pre-Press',
-  'Press / Printing',
-  'Finishing',
-  'QC & Packing',
-  'Dispatch',
-  'Delivered',
-  'Cancelled'
-];
+export const STAGE_OPTIONS = STAGE_DROPDOWN_OPTIONS.map(o => o.label);
 
-export const getEnquiryStage = (enq) => {
-  if (enq.current_stage) return enq.current_stage;
-  if (enq.status === 'Cancelled') return 'Cancelled';
-  if (enq.status === 'Completed') return 'Delivered';
-  if (enq.id === 'enq-9') return 'Costing';
-  if (enq.id === 'enq-10') return 'Finishing';
-  if (enq.id === 'enq-11') return 'Pre-Press';
-  if (enq.id === 'enq-12') return 'Press / Printing';
-  if (enq.id === 'enq-13') return 'Finishing';
-  if (enq.id === 'enq-14') return 'QC & Packing';
-  if (enq.prepress && enq.prepress !== '-') return 'Pre-Press';
-  return 'Order Desk';
+export const getEnquiryStage = (enq, jobOrders = []) => {
+  if (jobOrders && jobOrders.length > 0) {
+    const matchedJob = jobOrders.find(j =>
+      j.job_ticket_number === enq.enquiry_no ||
+      j.job_ticket_number === enq.id ||
+      (enq.dn_no && j.job_ticket_number === `SO-2026-${enq.dn_no}`) ||
+      (enq.dn_no && j.job_ticket_number?.includes(enq.dn_no)) ||
+      j.job_ticket_number?.includes(enq.id) ||
+      (enq.customer_name && j.customer_name && j.customer_name.toLowerCase().trim() === enq.customer_name.toLowerCase().trim() && (j.job_title === enq.job_specification || j.job_title === enq.job_name)) ||
+      (enq.customer_name && j.customer_name && j.customer_name.toLowerCase().trim() === enq.customer_name.toLowerCase().trim())
+    );
+    if (matchedJob) {
+      return normalizeStage(matchedJob.current_stage);
+    }
+  }
+  if (enq.current_stage) return normalizeStage(enq.current_stage);
+  if (enq.status === 'Cancelled') return STAGES.CANCELLED;
+  if (enq.status === 'Completed') return STAGES.COMPLETED;
+  if (enq.prepress && enq.prepress !== '-') return STAGES.PREPRESS;
+  return STAGES.QUOTATION;
 };
 
 export const getStageBadgeStyle = (stage) => {
-  switch (stage) {
-    case 'Pre-Press':
-      return 'bg-purple-100 text-purple-800 border-purple-300';
-    case 'Press / Printing':
-    case 'Press':
-      return 'bg-amber-100 text-amber-900 border-amber-300';
-    case 'Finishing':
-      return 'bg-orange-100 text-orange-900 border-orange-300';
-    case 'QC & Packing':
-      return 'bg-teal-100 text-teal-900 border-teal-300';
-    case 'Dispatch':
-      return 'bg-cyan-100 text-cyan-900 border-cyan-300';
-    case 'Costing':
-      return 'bg-indigo-100 text-indigo-900 border-indigo-300';
-    case 'Delivered':
-      return 'bg-emerald-100 text-emerald-900 border-emerald-300';
-    case 'Cancelled':
-      return 'bg-red-100 text-red-800 border-red-300';
-    case 'Order Desk':
-    default:
-      return 'bg-blue-100 text-blue-900 border-blue-300';
-  }
+  const canonical = normalizeStage(stage);
+  return STAGE_CONFIG[canonical]?.badgeClass || 'bg-blue-100 text-blue-900 border-blue-300';
 };
 
 export const EnquiryManagement = () => {
@@ -106,7 +91,9 @@ export const EnquiryManagement = () => {
     toggleStarEnquiry,
     isMasterEnquiryModalOpen,
     setIsMasterEnquiryModalOpen,
-    activeSubTab
+    activeSubTab,
+    jobOrders = [],
+    advanceJobStage
   } = useApp();
 
   const isEstimatorView = activeTab === 'estimator' || activeSubTab === 'quotes';
@@ -145,7 +132,7 @@ export const EnquiryManagement = () => {
   const [sourceFilter, setSourceFilter] = useState('All'); // All, Walk-in, Phone, WhatsApp, Others
   const [assignedFilter, setAssignedFilter] = useState('All'); // All, or specific staff
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFilter, setDateFilter] = useState('2025-06-03');
+  const [dateFilter, setDateFilter] = useState(() => new Date().toISOString().split('T')[0]);
   const [sortBy, setSortBy] = useState('Date (Newest)');
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
 
@@ -179,13 +166,14 @@ export const EnquiryManagement = () => {
       amount_note: `Quoted: ₹${newAmount.toLocaleString('en-IN')}`,
       costing_status: 'Costed',
       quotation_generated: true,
-      current_stage: 'Costing',
+      current_stage: STAGES.QUOTATION,
       quantity: quoteDetails.quantity || selectedEnquiryForQuote.quantity,
       paper: quoteDetails.paperType || selectedEnquiryForQuote.paper,
       size: quoteDetails.sheetSize || selectedEnquiryForQuote.size,
       color_spec: quoteDetails.colorSpec || selectedEnquiryForQuote.color,
       finishing_spec: quoteDetails.finishingSpec || selectedEnquiryForQuote.finishing,
       target_machine: quoteDetails.targetMachine,
+      assigned_press_machine: quoteDetails.targetMachine,
       job_name: quoteDetails.jobTitle || selectedEnquiryForQuote.job_name || selectedEnquiryForQuote.job_specification,
       priority: resolvedPriority,
       is_rush_order: isRush
@@ -197,6 +185,8 @@ export const EnquiryManagement = () => {
         customer_name: selectedEnquiryForQuote.customer_name,
         priority: resolvedPriority,
         total_estimated_price: newAmount,
+        target_machine: quoteDetails.targetMachine,
+        assigned_press_machine: quoteDetails.targetMachine,
         valid_until: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split('T')[0],
         items: [
           {
@@ -204,6 +194,8 @@ export const EnquiryManagement = () => {
             job_title: quoteDetails.jobTitle || selectedEnquiryForQuote.job_specification,
             print_quantity: quoteDetails.quantity,
             paper_type: quoteDetails.paperType,
+            target_machine: quoteDetails.targetMachine,
+            assigned_press_machine: quoteDetails.targetMachine,
             item_subtotal: newAmount
           }
         ]
@@ -240,6 +232,8 @@ export const EnquiryManagement = () => {
       refund_applicable: false,
       priority: resolvedPriority,
       is_rush_order: isRush,
+      target_machine: quoteDetails.targetMachine,
+      assigned_press_machine: quoteDetails.targetMachine,
       prepress: selectedEnquiryForQuote.prepress && selectedEnquiryForQuote.prepress !== '-' ? selectedEnquiryForQuote.prepress : 'Aruna'
     });
 
@@ -678,20 +672,31 @@ export const EnquiryManagement = () => {
                                     {enq.status}
                                   </span>
                                   <select
-                                    value={getEnquiryStage(enq)}
+                                    value={getEnquiryStage(enq, jobOrders)}
                                     onChange={(e) => {
-                                      const newStage = e.target.value;
+                                      const canonicalStage = normalizeStage(e.target.value);
                                       updateEnquiry(enq.id, {
-                                        current_stage: newStage,
-                                        status: newStage === 'Delivered' ? 'Completed' : (newStage === 'Cancelled' ? 'Cancelled' : (newStage === 'Pre-Press' ? 'Booked' : 'Pending'))
+                                        current_stage: canonicalStage,
+                                        status: canonicalStage === STAGES.COMPLETED ? 'Completed' : (canonicalStage === STAGES.CANCELLED ? 'Cancelled' : (canonicalStage === STAGES.PREPRESS ? 'Booked' : 'Pending'))
                                       });
+                                      const matchedJob = jobOrders?.find(j =>
+                                        j.job_ticket_number === enq.enquiry_no ||
+                                        j.job_ticket_number === enq.id ||
+                                        (enq.dn_no && j.job_ticket_number === `SO-2026-${enq.dn_no}`) ||
+                                        (enq.dn_no && j.job_ticket_number?.includes(enq.dn_no)) ||
+                                        j.job_ticket_number?.includes(enq.id) ||
+                                        (enq.customer_name && j.customer_name && j.customer_name.toLowerCase().trim() === enq.customer_name.toLowerCase().trim())
+                                      );
+                                      if (matchedJob && advanceJobStage) {
+                                        advanceJobStage(matchedJob.id, canonicalStage);
+                                      }
                                     }}
-                                    className={`text-[10px] font-bold py-0.5 px-1.5 rounded border cursor-pointer focus:outline-none transition shadow-2xs ${getStageBadgeStyle(getEnquiryStage(enq))}`}
+                                    className={`text-[10px] font-bold py-0.5 px-1.5 rounded border cursor-pointer focus:outline-none transition shadow-2xs ${getStageBadgeStyle(getEnquiryStage(enq, jobOrders))}`}
                                     title="Department stage (Click to change)"
                                   >
-                                    {STAGE_OPTIONS.map(stg => (
-                                      <option key={stg} value={stg} className="bg-white text-slate-800 font-semibold">
-                                        {stg}
+                                    {STAGE_DROPDOWN_OPTIONS.map(opt => (
+                                      <option key={opt.id} value={opt.id} className="bg-white text-slate-800 font-semibold">
+                                        {opt.label}
                                       </option>
                                     ))}
                                   </select>
@@ -880,19 +885,30 @@ export const EnquiryManagement = () => {
                                           <div>
                                             <span className="text-slate-500 block text-[11px] mb-1">Current Department:</span>
                                             <select
-                                              value={getEnquiryStage(enq)}
+                                              value={getEnquiryStage(enq, jobOrders)}
                                               onChange={(e) => {
-                                                const newStage = e.target.value;
+                                                const canonicalStage = normalizeStage(e.target.value);
                                                 updateEnquiry(enq.id, {
-                                                  current_stage: newStage,
-                                                  status: newStage === 'Delivered' ? 'Completed' : (newStage === 'Cancelled' ? 'Cancelled' : 'Pending')
+                                                  current_stage: canonicalStage,
+                                                  status: canonicalStage === STAGES.COMPLETED ? 'Completed' : (canonicalStage === STAGES.CANCELLED ? 'Cancelled' : 'Pending')
                                                 });
+                                                const matchedJob = jobOrders?.find(j =>
+                                                  j.job_ticket_number === enq.enquiry_no ||
+                                                  j.job_ticket_number === enq.id ||
+                                                  (enq.dn_no && j.job_ticket_number === `SO-2026-${enq.dn_no}`) ||
+                                                  (enq.dn_no && j.job_ticket_number?.includes(enq.dn_no)) ||
+                                                  j.job_ticket_number?.includes(enq.id) ||
+                                                  (enq.customer_name && j.customer_name && j.customer_name.toLowerCase().trim() === enq.customer_name.toLowerCase().trim())
+                                                );
+                                                if (matchedJob && advanceJobStage) {
+                                                  advanceJobStage(matchedJob.id, canonicalStage);
+                                                }
                                               }}
-                                              className={`w-full text-xs font-bold py-1 px-2 rounded-lg border cursor-pointer focus:outline-none transition ${getStageBadgeStyle(getEnquiryStage(enq))}`}
+                                              className={`w-full text-xs font-bold py-1 px-2 rounded-lg border cursor-pointer focus:outline-none transition ${getStageBadgeStyle(getEnquiryStage(enq, jobOrders))}`}
                                             >
-                                              {STAGE_OPTIONS.map(stg => (
-                                                <option key={stg} value={stg} className="bg-white text-slate-800 font-semibold">
-                                                  {stg}
+                                              {STAGE_DROPDOWN_OPTIONS.map(opt => (
+                                                <option key={opt.id} value={opt.id} className="bg-white text-slate-800 font-semibold">
+                                                  {opt.label}
                                                 </option>
                                               ))}
                                             </select>

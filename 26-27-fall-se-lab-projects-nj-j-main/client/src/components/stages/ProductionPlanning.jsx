@@ -38,6 +38,15 @@ import { Modal } from '../common/Modal';
 import { RushBadge } from '../common/RushBadge';
 import { QuoteEstimatorModal } from '../common/QuoteEstimatorModal';
 import { TechnicalSpecSheetModal } from '../common/TechnicalSpecSheetModal';
+import { resolveDefaultPressMachine } from '../../utils/machineRouting';
+import {
+  STAGES,
+  CANONICAL_STAGES,
+  STAGE_CONFIG,
+  normalizeStage,
+  getNextStage,
+  getPrevStage
+} from '../../utils/stageConstants';
 
 export const ProductionPlanning = () => {
   const {
@@ -58,59 +67,9 @@ export const ProductionPlanning = () => {
     activeUser
   } = useApp();
 
-  // The 5 Canonical Print ERP Workflow Stages
-  const stages = [
-    { id: 'Quotation', label: '1. Quotation', color: '#2563eb', badgeClass: 'bg-blue-100 text-blue-800' },
-    { id: 'Prepress', label: '2. Prepress', color: '#8b5cf6', badgeClass: 'bg-purple-100 text-purple-800' },
-    { id: 'Press', label: '3. Press', color: '#f59e0b', badgeClass: 'bg-amber-100 text-amber-800' },
-    { id: 'Finishing', label: '4. Finishing', color: '#10b981', badgeClass: 'bg-emerald-100 text-emerald-800' },
-    { id: 'Dispatch', label: '5. Dispatch', color: '#06b6d4', badgeClass: 'bg-cyan-100 text-cyan-800' },
-  ];
-
-  // Helper to normalize any incoming stage into one of the 5 canonical stages
-  const mapToCanonicalStage = (stage) => {
-    if (!stage) return 'Quotation';
-    const s = String(stage).toLowerCase().trim();
-    if (s.includes('quote') || s.includes('cost') || s.includes('order desk') || s.includes('enquiry')) {
-      return 'Quotation';
-    }
-    if (s.includes('prep') || s.includes('design') || s.includes('plate') || s.includes('proof')) {
-      return 'Prepress';
-    }
-    if (s.includes('press') || s.includes('print')) {
-      return 'Press';
-    }
-    if (s.includes('finish') || s.includes('bind') || s.includes('qc') || s.includes('pack')) {
-      return 'Finishing';
-    }
-    if (s.includes('dispatch') || s.includes('deliver') || s.includes('logist')) {
-      return 'Dispatch';
-    }
-    return 'Press';
-  };
-
-  const getNextStage = (current) => {
-    const canonical = mapToCanonicalStage(current);
-    switch (canonical) {
-      case 'Quotation': return 'Prepress';
-      case 'Prepress': return 'Press';
-      case 'Press': return 'Finishing';
-      case 'Finishing': return 'Dispatch';
-      case 'Dispatch': return 'Completed';
-      default: return null;
-    }
-  };
-
-  const getPrevStage = (current) => {
-    const canonical = mapToCanonicalStage(current);
-    switch (canonical) {
-      case 'Dispatch': return 'Finishing';
-      case 'Finishing': return 'Press';
-      case 'Press': return 'Prepress';
-      case 'Prepress': return 'Quotation';
-      default: return null;
-    }
-  };
+  // The 6 Canonical Print ERP Workflow Stages from stageConstants
+  const stages = CANONICAL_STAGES;
+  const mapToCanonicalStage = normalizeStage;
 
   const [showRushOnly, setShowRushOnly] = useState(activeSubTab === 'rush');
 
@@ -338,8 +297,8 @@ export const ProductionPlanning = () => {
     if (card.entityType === 'enquiry') {
       const enq = card.rawEntity;
       updateEnquiry(enq.id, {
-        current_stage: next === 'Prepress' ? 'Pre-Press' : next,
-        status: 'Pending',
+        current_stage: next,
+        status: next === STAGES.COMPLETED ? 'Completed' : 'Pending',
       });
 
       // Ensure a production job order exists for downstream press & finishing
@@ -361,7 +320,7 @@ export const ProductionPlanning = () => {
           priority: card.priority,
           is_rush_order: isRush,
           queue_position: 1,
-          assigned_press_machine: 'Ryobi 660 (Ramamurthy Nagar Plant)',
+          assigned_press_machine: enq.assigned_press_machine || enq.target_machine || resolveDefaultPressMachine(enq),
           assigned_operator: 'Rajesh Nair',
           target_completion_date: enq.expected_delivery || new Date(Date.now() + 86400000 * 2).toISOString(),
           created_at: new Date().toISOString(),
@@ -553,8 +512,8 @@ export const ProductionPlanning = () => {
       </div>
 
       <div className="stage-page-container">
-        {/* 5-Column Kanban Board Layout */}
-        <div className="kanban-board-container grid grid-cols-1 md:grid-cols-5 gap-3">
+        {/* 6-Column Kanban Board Layout */}
+        <div className="kanban-board-container grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
           {stages.map(stage => {
             const columnCards = activeCards
               .filter(card => {
@@ -724,6 +683,15 @@ export const ProductionPlanning = () => {
                               </div>
                             )}
 
+                            {stage.id === 'QualityControl' && (
+                              <div className="flex items-center justify-between text-[10px] text-slate-600">
+                                <span className={`truncate max-w-[130px] font-mono font-bold ${card.qcFlagged ? 'text-rose-600' : 'text-teal-700'}`}>
+                                  {card.qcFlagged ? '⚠️ QC Flagged' : 'Awaiting QC Clearance'}
+                                </span>
+                                <span className="text-teal-700 font-mono font-semibold">{formattedDate}</span>
+                              </div>
+                            )}
+
                             {stage.id === 'Dispatch' && (
                               <div className="flex items-center justify-between text-[10px] text-slate-600">
                                 <span className="text-cyan-800 font-semibold font-mono">Ready for Dispatch</span>
@@ -745,7 +713,7 @@ export const ProductionPlanning = () => {
                                   <FileText size={11} className="text-blue-600" /> Specs
                                 </button>
 
-                                {/* QC Send Back Button for Stages 2-5 */}
+                                {/* QC Send Back Button for Stages 2-6 */}
                                 {prevStage && (
                                   <button
                                     type="button"
@@ -794,7 +762,7 @@ export const ProductionPlanning = () => {
                                     className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer"
                                     title={`Advance to ${nextStage}`}
                                   >
-                                    <Send size={10} /> {nextStage}
+                                    <Send size={10} /> {nextStage === 'QualityControl' ? 'QC' : nextStage}
                                   </button>
                                 )}
                               </div>

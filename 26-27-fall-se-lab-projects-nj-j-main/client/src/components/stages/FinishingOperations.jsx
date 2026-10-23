@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Scissors,
   CheckCircle2,
@@ -15,12 +15,16 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { RushBadge } from '../common/RushBadge';
+import { STAGES, normalizeStage } from '../../utils/stageConstants';
 
 export const FinishingOperations = () => {
   const {
     finishingOps,
+    addFinishingOp,
     updateFinishingOp,
     jobOrders,
+    salesBookings,
+    enquiries,
     setActiveTab,
     setActiveSubTab,
     advanceJobStage,
@@ -31,22 +35,44 @@ export const FinishingOperations = () => {
   const [expandedOpId, setExpandedOpId] = useState(null);
   const [logInputs, setLogInputs] = useState({});
   const [feedbackByOp, setFeedbackByOp] = useState({});
-  const [viewFilter, setViewFilter] = useState('active'); // 'active' | 'sent_to_qc'
+
+  // Ensure any job in Finishing stage is tracked in finishingOps
+  useEffect(() => {
+    (jobOrders || []).forEach(j => {
+      const isFinishing = normalizeStage(j.current_stage) === STAGES.FINISHING;
+      if (isFinishing && !finishingOps.some(f => f.job_ticket_number === j.job_ticket_number)) {
+        addFinishingOp({
+          job_ticket_number: j.job_ticket_number,
+          job_title: j.job_title || j.product || j.job_name || 'Commercial Print Order',
+          customer_name: j.customer_name,
+          activity_type: j.finishing_spec || 'Standard Trimming & Packing',
+          workcenter: 'Standard Finishing & Bindery Unit',
+          operator_name: 'Anil Kumar',
+          status: 'In-Progress',
+          planned_qty: j.print_quantity || 1000,
+          completed_qty: 0,
+          wastage_qty: 0,
+          quality_issues: 'None',
+          started_at: j.created_at || new Date().toISOString(),
+          is_subcontract: false,
+          moved_to_qc: false,
+          qc_ready: false
+        });
+      }
+    });
+  }, [jobOrders, finishingOps, addFinishingOp]);
 
   const activeOps = finishingOps.filter(op => !op.moved_to_qc);
-  const movedToQcOps = finishingOps.filter(op => op.moved_to_qc);
-  const displayOps = viewFilter === 'active' ? activeOps : movedToQcOps;
+  const displayOps = activeOps;
 
   const handleMoveToQC = (op) => {
     const matchedJob = jobOrders?.find(j => j.job_ticket_number === op.job_ticket_number);
     if (matchedJob) {
-      if (advanceJobStage && matchedJob.current_stage !== 'FinishingQC' && matchedJob.current_stage !== 'QC & Packaging') {
-        advanceJobStage(
-          matchedJob.id,
-          'FinishingQC',
-          `Finishing & Bindery completed (${op.activity_type}). Transferred to Quality Control (QC) inspection.`
-        );
-      }
+      advanceJobStage(
+        matchedJob.id,
+        STAGES.QC,
+        `Finishing & Bindery completed (${op.activity_type}). Transferred to Quality Control (QC) inspection.`
+      );
     }
     updateFinishingOp(op.id, { moved_to_qc: true, qc_ready: true, status: 'Completed' });
     setExpandedOpId(null);
@@ -132,51 +158,20 @@ export const FinishingOperations = () => {
         <div className="p-3 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 gap-2">
           <div className="flex items-center gap-2">
             <span className="font-bold text-xs text-slate-800 uppercase font-mono">
-              {viewFilter === 'active' ? 'Active Finishing Batches' : 'Batches Transferred to QC'}
+              Active Finishing Batches
             </span>
             <span className="text-[10px] text-slate-500 font-normal">
-              {viewFilter === 'active'
-                ? '(Click order row to expand logger and update completed quantity/wastage)'
-                : '(Batches transferred to Quality Control Inspection desk)'}
+              (Click order row to expand logger and update completed quantity/wastage)
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-200 text-[11px] font-mono">
-              <button
-                type="button"
-                onClick={() => setViewFilter('active')}
-                className={`px-2.5 py-1 rounded-md font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  viewFilter === 'active'
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <span>Active Batches</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                  activeOps.length > 0 ? 'bg-blue-100 text-blue-800 font-bold' : 'bg-slate-200 text-slate-600'
-                }`}>
-                  {activeOps.length}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewFilter('sent_to_qc')}
-                className={`px-2.5 py-1 rounded-md font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  viewFilter === 'sent_to_qc'
-                    ? 'bg-white text-emerald-900 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <ShieldCheck size={12} className="text-emerald-600" />
-                <span>Sent to QC</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                  movedToQcOps.length > 0 ? 'bg-emerald-100 text-emerald-800 font-bold' : 'bg-slate-200 text-slate-600'
-                }`}>
-                  {movedToQcOps.length}
-                </span>
-              </button>
-            </div>
+            <span className="px-2.5 py-1 rounded-lg text-[11px] font-mono bg-blue-100 text-blue-900 font-bold border border-blue-200 flex items-center gap-1.5">
+              <span>Active Batches:</span>
+              <b className="px-1.5 py-0.2 rounded-full bg-blue-200 text-blue-950 font-bold text-[10px]">
+                {activeOps.length}
+              </b>
+            </span>
           </div>
         </div>
 
@@ -186,67 +181,54 @@ export const FinishingOperations = () => {
               <tr className="bg-slate-50 text-slate-500 text-[10px] font-mono uppercase tracking-wider border-b border-slate-200">
                 <th className="p-2.5 w-8 text-center"></th>
                 <th className="p-2.5">Job Ticket</th>
+                <th className="p-2.5">Job Name</th>
+                <th className="p-2.5">Customer Name</th>
                 <th className="p-2.5">Activity Type</th>
-                <th className="p-2.5">Workcenter / Machine</th>
-                <th className="p-2.5">Operator</th>
-                <th className="p-2.5 text-right">Job Card Qty</th>
-                <th className="p-2.5 text-right">Completed Qty</th>
-                <th className="p-2.5 text-right">Wastage</th>
+                <th className="p-2.5">Workstation</th>
                 <th className="p-2.5 text-center">Status</th>
-                <th className="p-2.5 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {displayOps.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-500">
+                  <td colSpan={7} className="p-8 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center max-w-md mx-auto space-y-2">
                       <CheckCircle2 size={32} className="text-emerald-500" />
                       <span className="font-bold text-slate-800 text-sm">
-                        {viewFilter === 'active'
-                          ? 'No Active Finishing Batches Pending'
-                          : 'No Batches Transferred to QC Yet'}
+                        No Active Finishing Batches Pending
                       </span>
                       <p className="text-[11px] text-slate-500">
-                        {viewFilter === 'active'
-                          ? 'All completed finishing batches have been transferred to the Quality Control (QC) window.'
-                          : 'Batches that you complete and move to QC will be displayed here.'}
+                        All completed finishing batches have been transferred to the Quality Control (QC) window.
                       </p>
-                      {viewFilter === 'active' && movedToQcOps.length > 0 && (
-                        <div className="flex items-center gap-2 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => setViewFilter('sent_to_qc')}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition border border-slate-300 cursor-pointer flex items-center gap-1.5"
-                          >
-                            <ShieldCheck size={13} className="text-emerald-600" />
-                            <span>View {movedToQcOps.length} Batches Sent to QC</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveTab('qc');
-                              if (setActiveSubTab) setActiveSubTab('qc_inspection');
-                            }}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                          >
-                            <span>Open QC Window</span>
-                            <ArrowRight size={13} />
-                          </button>
-                        </div>
-                      )}
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('qc');
+                            if (setActiveSubTab) setActiveSubTab('qc_inspection');
+                          }}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <span>Open QC Window</span>
+                          <ArrowRight size={13} />
+                        </button>
+                      </div>
                     </div>
                   </td>
                 </tr>
               ) : (
                 displayOps.map(op => {
-                const matchedJob = jobOrders?.find(j => j.job_ticket_number === op.job_ticket_number);
+                const matchedJob = jobOrders?.find(j => j.job_ticket_number === op.job_ticket_number)
+                  || salesBookings?.find(b => b.job_ticket_number === op.job_ticket_number || b.id === op.job_ticket_number)
+                  || enquiries?.find(e => e.dn_no === op.job_ticket_number || e.id === op.job_ticket_number);
                 const targetQty = matchedJob?.print_quantity || op.planned_qty || 0;
                 const isExpanded = expandedOpId === op.id;
                 const progressPercent = targetQty > 0
                   ? Math.min(100, Math.round(((op.completed_qty || 0) / targetQty) * 100))
                   : 0;
                 const feedback = feedbackByOp[op.id];
+                const jobTitle = matchedJob?.job_title || matchedJob?.job_name || matchedJob?.product || matchedJob?.job_specification || op.job_title || 'Commercial Print Order';
+                const customerName = matchedJob?.customer_name || op.customer_name || 'Direct Customer';
 
                 return (
                   <React.Fragment key={op.id}>
@@ -266,7 +248,7 @@ export const FinishingOperations = () => {
                           }`}
                         />
                       </td>
-                      <td className="p-2.5 font-mono font-bold text-slate-900">
+                      <td className="p-2.5 font-mono font-bold text-slate-900 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span>{op.job_ticket_number}</span>
                           {resolveJobRushStatus(matchedJob || op) && (
@@ -287,36 +269,19 @@ export const FinishingOperations = () => {
                           )}
                         </div>
                       </td>
-                      <td className="p-2.5 font-semibold text-slate-800">{op.activity_type}</td>
-                      <td className="p-2.5 font-mono text-[11px] text-slate-600">{op.workcenter}</td>
-                      <td className="p-2.5 text-slate-600">{op.operator_name}</td>
-                      
-                      {/* Job Card Planned Qty - Non-editable read-only */}
-                      <td className="p-2.5 text-right font-mono font-semibold text-slate-800">
-                        <span title="Order quantity from Job Card">
-                          {targetQty.toLocaleString()}
-                        </span>
+                      <td className="p-2.5 font-semibold text-slate-900 max-w-[200px] truncate" title={jobTitle}>
+                        {jobTitle}
                       </td>
-
-                      {/* Completed Qty - Non-editable read-only, updated through expanded menu */}
-                      <td className="p-2.5 text-right font-mono font-bold text-emerald-700">
-                        <div className="flex items-center justify-end gap-1">
-                          <span>{(op.completed_qty || 0).toLocaleString()}</span>
-                          {targetQty > 0 && (
-                            <span className="text-[9px] font-normal text-emerald-600">
-                              ({progressPercent}%)
-                            </span>
-                          )}
-                        </div>
+                      <td className="p-2.5 text-slate-700 font-medium whitespace-nowrap">
+                        {customerName}
                       </td>
-
-                      {/* Wastage - Non-editable read-only */}
-                      <td className="p-2.5 text-right font-mono font-bold text-rose-600">
-                        {(op.wastage_qty || 0).toLocaleString()}
+                      <td className="p-2.5 font-semibold text-slate-800">
+                        {op.activity_type}
                       </td>
-
-                      {/* Status - Non-editable badge, automatically updated */}
-                      <td className="p-2.5 text-center">
+                      <td className="p-2.5 font-mono text-[11px] text-slate-600">
+                        {op.workcenter}
+                      </td>
+                      <td className="p-2.5 text-center whitespace-nowrap">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
                           op.status === 'Completed'
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -327,70 +292,12 @@ export const FinishingOperations = () => {
                           {op.status}
                         </span>
                       </td>
-
-                      {/* Action column */}
-                      <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1.5">
-                          {op.status !== 'Completed' ? (
-                            <button
-                              onClick={() => setExpandedOpId(prev => prev === op.id ? null : op.id)}
-                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-[10px] font-bold transition cursor-pointer inline-flex items-center gap-1"
-                              title="Open expanded menu to record completed quantity"
-                            >
-                              <Plus size={11} />
-                              <span>{isExpanded ? 'Close' : 'Log Output'}</span>
-                            </button>
-                          ) : (
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleMoveToQC(op)}
-                                className={`px-2.5 py-1 rounded text-[10px] font-bold transition cursor-pointer inline-flex items-center gap-1 shadow-2xs ${
-                                  op.moved_to_qc
-                                    ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300'
-                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                }`}
-                                title="Move completed job to Quality Control (QC) inspection window"
-                              >
-                                <ShieldCheck size={12} className={op.moved_to_qc ? 'text-emerald-700' : 'text-white'} />
-                                <span>{op.moved_to_qc ? 'In QC Window' : 'Move to QC'}</span>
-                                <ArrowRight size={10} />
-                              </button>
-                              <button
-                                onClick={() => updateFinishingOp(op.id, { status: 'In-Progress', moved_to_qc: false })}
-                                className="text-[10px] text-slate-400 hover:text-slate-700 underline font-mono cursor-pointer"
-                                title="Re-open operation"
-                              >
-                                Reopen
-                              </button>
-                            </div>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const job = jobOrders.find(j => j.job_ticket_number === op.job_ticket_number);
-                              openQCFlagModal(job || {
-                                job_ticket_number: op.job_ticket_number,
-                                customer_name: op.operator_name,
-                                job_title: `${op.activity_type} (${op.workcenter})`,
-                                current_stage: 'FinishingQC'
-                              }, 'Finishing & Bindery');
-                            }}
-                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[10px] font-bold transition cursor-pointer inline-flex items-center gap-1"
-                            title="Raise Quality Control Flag on this finishing operation"
-                          >
-                            <Flag size={11} />
-                            <span>QC Flag</span>
-                          </button>
-                        </div>
-                      </td>
                     </tr>
 
                     {/* Expandable Output & Wastage Logger Option */}
                     {isExpanded && (
                       <tr className="bg-slate-50/60 border-b border-slate-200">
-                        <td colSpan={10} className="p-3 pt-0 pb-4">
+                        <td colSpan={7} className="p-3 pt-0 pb-4">
                           <div className="bg-white border border-blue-200 rounded-xl p-3.5 shadow-xs space-y-3">
                             {/* Header inside the expanded drawer */}
                             <div className="flex items-center justify-between text-xs font-bold text-blue-950 pb-2 border-b border-slate-100">
@@ -404,6 +311,10 @@ export const FinishingOperations = () => {
                                     <RushBadge size="xs" />
                                   )}
                                   <span className="text-slate-400 mx-1">•</span>
+                                  <span className="text-slate-900 font-bold">{jobTitle}</span>
+                                  <span className="text-slate-400 mx-1">•</span>
+                                  <span className="text-slate-600 font-medium">({customerName})</span>
+                                  <span className="text-slate-400 mx-1">•</span>
                                   <span className="text-slate-700">{op.activity_type}</span>
                                   <span className="text-slate-500 font-normal text-[11px] ml-1">({op.workcenter})</span>
                                 </div>
@@ -415,6 +326,25 @@ export const FinishingOperations = () => {
                                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-100 text-blue-800 font-bold border border-blue-200">
                                   Completed: <b>{(op.completed_qty || 0).toLocaleString()} sh</b>
                                 </span>
+                                {op.status === 'Completed' && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleMoveToQC(op);
+                                    }}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs ${
+                                      op.moved_to_qc
+                                        ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300'
+                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                    }`}
+                                    title="Move completed job to Quality Control (QC) inspection window"
+                                  >
+                                    <ShieldCheck size={11} className={op.moved_to_qc ? 'text-emerald-700' : 'text-white'} />
+                                    <span>{op.moved_to_qc ? 'In QC Window' : 'Move to QC'}</span>
+                                    <ArrowRight size={10} />
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -422,9 +352,9 @@ export const FinishingOperations = () => {
                                     const job = jobOrders.find(j => j.job_ticket_number === op.job_ticket_number);
                                     openQCFlagModal(job || {
                                       job_ticket_number: op.job_ticket_number,
-                                      customer_name: op.operator_name,
-                                      job_title: `${op.activity_type} (${op.workcenter})`,
-                                      current_stage: 'FinishingQC'
+                                      customer_name: customerName,
+                                      job_title: jobTitle,
+                                      current_stage: STAGES.FINISHING
                                     }, 'Finishing & Bindery');
                                   }}
                                   className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
@@ -623,16 +553,26 @@ export const FinishingOperations = () => {
                                     <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
                                     <span>Finishing target met. Move job forward to Quality Control:</span>
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleMoveToQC(op)}
-                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs shrink-0"
-                                    title="Move this job ticket directly to Quality Control (QC) inspection window"
-                                  >
-                                    <ShieldCheck size={13} />
-                                    <span>{op.moved_to_qc ? 'Open in QC Window' : 'Move Job to QC Window'}</span>
-                                    <ArrowRight size={12} />
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoveToQC(op)}
+                                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs shrink-0"
+                                      title="Move this job ticket directly to Quality Control (QC) inspection window"
+                                    >
+                                      <ShieldCheck size={13} />
+                                      <span>{op.moved_to_qc ? 'Open in QC Window' : 'Move Job to QC Window'}</span>
+                                      <ArrowRight size={12} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateFinishingOp(op.id, { status: 'In-Progress', moved_to_qc: false })}
+                                      className="text-[10px] text-slate-500 hover:text-slate-800 underline font-mono cursor-pointer"
+                                      title="Re-open operation"
+                                    >
+                                      Reopen
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </div>

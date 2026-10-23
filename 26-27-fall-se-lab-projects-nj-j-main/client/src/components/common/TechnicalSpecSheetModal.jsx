@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { RushBadge } from './RushBadge';
+import { resolveDefaultPressMachine } from '../../utils/machineRouting';
 
 /**
  * Standardized Technical Job Engineering Spec Sheet Modal
@@ -60,8 +61,8 @@ export const TechnicalSpecSheetModal = ({
   }
 
   // Machine resolution
-  const assignedMachine = entity.target_machine || active.assigned_press_machine || 
-    (Number(quantity) > 5000 ? 'Komori Lithrone 26 (Ramamurthy Nagar Plant)' : 'Ryobi 660 (Ramamurthy Nagar Plant)');
+  const assignedMachine = entity.target_machine || entity.assigned_press_machine || active.assigned_press_machine || 
+    resolveDefaultPressMachine({ ...entity, ...active, quantity });
 
   // Finishing resolution
   let finishingText = 'Thermal Matte Lamination, 3-Side Trim';

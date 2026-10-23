@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { RushBadge } from '../common/RushBadge';
+import { STAGES, normalizeStage, STAGE_CONFIG } from '../../utils/stageConstants';
 
 export const QualityControlModule = () => {
   const {
@@ -46,7 +47,13 @@ export const QualityControlModule = () => {
     resolveJobRushStatus
   } = useApp();
 
-  const finishingJobs = jobOrders.filter(j => j.current_stage === 'FinishingQC' || j.current_stage === 'QC & Packaging');
+  const finishingJobs = jobOrders.filter(j => 
+    j.current_stage === 'QualityControl' || 
+    j.current_stage === 'QC' || 
+    j.current_stage === 'QC & Packaging' ||
+    j.current_stage === 'QCInspection' ||
+    (j.current_stage === 'FinishingQC' && (j.qc_ready || j.qc_flagged))
+  );
   const openIssues = issues.filter(i => !i.resolved);
   const resolvedIssues = issues.filter(i => i.resolved);
 
@@ -61,19 +68,19 @@ export const QualityControlModule = () => {
     const existing = activeActions[issue.id];
     if (existing) return existing;
 
-    // Suggest default previous station based on current stage
-    let defaultStage = 'PressRun';
-    const curStage = issue.current_stage || '';
-    if (curStage.includes('Dispatch') || curStage.includes('Delivered')) {
-      defaultStage = 'FinishingQC';
-    } else if (curStage.includes('Finishing') || curStage.includes('QC')) {
-      defaultStage = 'PressRun';
-    } else if (curStage.includes('Press')) {
-      defaultStage = 'PlateMaking';
-    } else if (curStage.includes('Plate')) {
-      defaultStage = 'DesignProofing';
+    // Suggest default previous station based on canonical stage
+    let defaultStage = STAGES.FINISHING;
+    const curStage = normalizeStage(issue.current_stage);
+    if (curStage === STAGES.DISPATCH || curStage === STAGES.COMPLETED) {
+      defaultStage = STAGES.QC;
+    } else if (curStage === STAGES.QC) {
+      defaultStage = STAGES.FINISHING;
+    } else if (curStage === STAGES.FINISHING) {
+      defaultStage = STAGES.PRESS;
+    } else if (curStage === STAGES.PRESS) {
+      defaultStage = STAGES.PREPRESS;
     } else {
-      defaultStage = 'DesignProofing';
+      defaultStage = STAGES.PREPRESS;
     }
 
     return {
@@ -115,12 +122,12 @@ export const QualityControlModule = () => {
 
   const handleConfirmSendBack = (issue) => {
     const state = getActionState(issue);
-    sendBackJobFromQC(issue.id, state.targetStage || 'PressRun', state.notes);
+    sendBackJobFromQC(issue.id, state.targetStage || STAGES.PRESS, state.notes);
     updateActionState(issue.id, { mode: null });
   };
 
   const handlePassQCAndReadyDispatch = (jobId) => {
-    advanceJobStage(jobId, 'DispatchReady', 'Passed 100% Quality Inspection. Packed and ready for dispatch.');
+    advanceJobStage(jobId, STAGES.DISPATCH, 'Passed 100% Quality Inspection. Packed and ready for dispatch.');
     setActiveTab('dispatch');
   };
 
@@ -170,10 +177,14 @@ export const QualityControlModule = () => {
   const getStageHumanName = (stageKey) => {
     switch (stageKey) {
       case 'DesignProofing': return '1. Pre-Press & Artwork Proofing';
-      case 'PlateMaking': return '2. CTP Plate Making';
+      case 'PlateMaking': return '2. Pre-Press CTP Plate';
       case 'PressRun': return '3. Press Run Terminal';
+      case 'Finishing':
       case 'FinishingQC': return '4. Finishing & Bindery';
-      case 'DispatchReady': return '5. Delivery & Dispatch Ready';
+      case 'QualityControl':
+      case 'QC':
+      case 'QC & Packaging': return '5. Quality Control Inspection';
+      case 'DispatchReady': return '6. Delivery & Dispatch Ready';
       default: return stageKey || 'Production Station';
     }
   };
@@ -648,14 +659,14 @@ export const QualityControlModule = () => {
                                         Select Target Workstation to Rewind Job Card:
                                       </label>
                                       <select
-                                        value={actionState.targetStage || 'PressRun'}
+                                        value={actionState.targetStage || STAGES.PRESS}
                                         onChange={(e) => updateActionState(iss.id, { targetStage: e.target.value })}
                                         className="w-full bg-white border border-amber-300 rounded p-1.5 text-xs font-bold text-amber-950 focus:outline-none focus:border-amber-500 cursor-pointer"
                                       >
-                                        <option value="DesignProofing">1. Pre-Press & Proofing (Art File / Preflight Corrections)</option>
-                                        <option value="PlateMaking">2. CTP Plate Making (Burn New Thermal Plates)</option>
-                                        <option value="PressRun">3. Press Run Terminal (Rerun Sheets / Ink Balance Correction)</option>
-                                        <option value="FinishingQC">4. Finishing & Bindery (Recut, Re-laminate, or Re-bind)</option>
+                                        <option value={STAGES.PREPRESS}>1. Pre-Press & Proofing (Art File / Preflight Corrections)</option>
+                                        
+                                        <option value={STAGES.PRESS}>2. Press Run Terminal (Rerun Sheets / Ink Balance Correction)</option>
+                                        <option value={STAGES.FINISHING}>3. Finishing & Bindery (Recut, Re-laminate, or Re-bind)</option>
                                       </select>
                                     </div>
 

@@ -238,7 +238,7 @@ export const INITIAL_INVENTORY = [
   },
 ];
 
-export const INITIAL_PURCHASE_REQUESTS = [
+const DEMO_PURCHASE_REQUESTS = [
   {
     id: 'po-101',
     po_number: 'PO-2026-088',
@@ -263,7 +263,7 @@ export const INITIAL_PURCHASE_REQUESTS = [
   },
 ];
 
-export const INITIAL_QUOTES = [
+const DEMO_QUOTES = [
   {
     id: 'q-101',
     quote_number: 'QUO-2026-0142',
@@ -377,7 +377,7 @@ export const INITIAL_QUOTES = [
   }
 ];
 
-export const INITIAL_DESIGN_PROOFS = [
+const DEMO_DESIGN_PROOFS = [
   {
     id: 'dp-101',
     quote_id: 'q-101',
@@ -434,7 +434,7 @@ export const INITIAL_DESIGN_PROOFS = [
   }
 ];
 
-export const INITIAL_JOB_ORDERS = [
+const DEMO_JOB_ORDERS = [
   {
     id: 'job-101',
     job_ticket_number: 'JT-2026-001',
@@ -451,7 +451,7 @@ export const INITIAL_JOB_ORDERS = [
     priority: 'Urgent', // [RUSH CASE]
     is_rush_order: true,
     queue_position: 1,
-    assigned_press_machine: 'Lithrone 26 (Ramamurthy Nagar Plant)',
+    assigned_press_machine: 'Ryobi 32 (Ramamurthy Nagar Plant)',
     assigned_operator: 'Rajesh Nair',
     target_completion_date: '2026-08-28T18:00:00Z', // Today 6:00 PM!
     created_at: '2026-08-26T11:00:00Z',
@@ -470,11 +470,11 @@ export const INITIAL_JOB_ORDERS = [
     paper_details: '300 GSM Premium Art Card (20" x 30") - 10 Reams',
     color_spec: '4/0 Single Side CMYK + Spot Gloss Varnish',
     finishing_spec: 'Spot UV, Die Punching, Pasting',
-    current_stage: 'PressRun', // Komori Lithrone GL-40
+    current_stage: 'PressRun', // Ryobi 660
     priority: 'Normal',
     is_rush_order: false,
     queue_position: 2,
-    assigned_press_machine: 'Komori Lithrone GL-40 (5-Color + Coater)',
+    assigned_press_machine: 'Ryobi 660 (Ramamurthy Nagar Plant)',
     assigned_operator: 'Rajesh Nair',
     target_completion_date: '2026-08-30T17:00:00Z',
     created_at: '2026-08-27T12:30:00Z',
@@ -488,16 +488,16 @@ export const INITIAL_JOB_ORDERS = [
     customer_id: 'cust-3',
     customer_name: 'Horizon EduTech Publishing',
     job_title: 'Grade 10 Mathematics Textbook (2000 Copies)',
-    production_type: 'Offset',
+    production_type: 'Digital',
     print_quantity: 2000,
     paper_details: '80 GSM Maplitho (Inner) + 250 GSM Card (Cover)',
     color_spec: '1/1 Inner Black + 4/0 Cover CMYK',
     finishing_spec: 'Thermal Gloss Lamination, Perfect Binding',
-    current_stage: 'FinishingQC', // Cutting & Perfect Binding
+    current_stage: 'Finishing', // Cutting & Perfect Binding
     priority: 'High',
     is_rush_order: false,
     queue_position: 3,
-    assigned_press_machine: 'Welbound 6-Clamp Perfect Binding Machine',
+    assigned_press_machine: 'Konica Minolta C4080 (Kalkere Plant)',
     assigned_operator: 'Anil Kumar',
     target_completion_date: '2026-08-29T14:00:00Z',
     created_at: '2026-08-25T10:00:00Z',
@@ -520,7 +520,7 @@ export const INITIAL_JOB_ORDERS = [
     priority: 'Normal',
     is_rush_order: false,
     queue_position: 4,
-    assigned_press_machine: 'Polar 115 EM Guillotine Paper Cutter',
+    assigned_press_machine: 'KM2100 Black (Byrathi Plant)',
     assigned_operator: 'Anil Kumar',
     target_completion_date: '2026-08-28T12:00:00Z',
     created_at: '2026-08-27T09:00:00Z',
@@ -529,7 +529,7 @@ export const INITIAL_JOB_ORDERS = [
   }
 ];
 
-export const INITIAL_WORKSTATION_LOGS = [
+const DEMO_WORKSTATION_LOGS = [
   {
     id: 'log-1',
     job_order_id: 'job-101',
@@ -574,7 +574,7 @@ export const INITIAL_WORKSTATION_LOGS = [
   }
 ];
 
-export const INITIAL_MATERIAL_RESERVATIONS = [
+const DEMO_MATERIAL_RESERVATIONS = [
   {
     id: 'res-1',
     job_order_id: 'job-101',
@@ -604,7 +604,7 @@ export const INITIAL_MATERIAL_RESERVATIONS = [
   },
 ];
 
-export const INITIAL_ISSUES = [
+const DEMO_ISSUES = [
   {
     id: 'iss-1',
     job_order_id: 'job-102',
@@ -631,7 +631,7 @@ export const INITIAL_ISSUES = [
   }
 ];
 
-export const INITIAL_DISPATCH = [
+const DEMO_DISPATCH = [
   {
     id: 'disp-101',
     job_order_id: 'job-104',
@@ -650,7 +650,7 @@ export const INITIAL_DISPATCH = [
   }
 ];
 
-export const INITIAL_INVOICES = [
+const DEMO_INVOICES = [
   {
     id: 'inv-901',
     invoice_number: 'INV-2026-0891',
@@ -701,7 +701,7 @@ export const INITIAL_INVOICES = [
   }
 ];
 
-export const INITIAL_PAYMENT_RECEIPTS = [
+const DEMO_PAYMENT_RECEIPTS = [
   {
     id: 'rec-1',
     invoice_id: 'inv-901',
@@ -726,7 +726,7 @@ export const INITIAL_PAYMENT_RECEIPTS = [
   }
 ];
 
-export const INITIAL_CUSTOMER_FEEDBACK = [
+const DEMO_CUSTOMER_FEEDBACK = [
   {
     id: 'fb-1',
     job_ticket_number: 'JT-2026-004',
@@ -737,7 +737,7 @@ export const INITIAL_CUSTOMER_FEEDBACK = [
   }
 ];
 
-export const INITIAL_TASKS = [
+const DEMO_TASKS = [
   {
     id: 'tsk-1',
     assigned_to_user_id: 'usr-2',
@@ -770,7 +770,7 @@ export const INITIAL_TASKS = [
   }
 ];
 
-export const INITIAL_ALERTS = [
+const DEMO_ALERTS = [
   {
     id: 'alt-1',
     alert_type: 'RushOrderAlert',
@@ -797,7 +797,7 @@ export const INITIAL_ALERTS = [
   }
 ];
 
-export const INITIAL_ENQUIRIES = [
+const DEMO_ENQUIRIES = [
   { id: 'enq-1', date: '02-06-2025', expected_delivery: '04-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Nicey', customer_name: 'Ayush', phone: '9980612998', job_specification: 'Book 1 nos 240x240 96 pages Cover 300GSM...', amount: 2400, amount_note: '', prepress: 'Aruna', dn_no: '597', advance_remarks: 'Full paid', status: 'Completed', is_starred: false, costing_status: 'Costed', support_notes: 'Urgent delivery needed for school event', current_stage: 'Delivered' },
   { id: 'enq-2', date: '02-06-2025', expected_delivery: '04-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Nicey', customer_name: 'Mounesh', phone: '8792783683', job_specification: 'Stickers (Ready to print) Size: 15x7.5 cm...', amount: 1200, amount_note: '(with edits 1500)', prepress: '-', dn_no: '-', advance_remarks: 'Cancelled', status: 'Cancelled', is_starred: false, costing_status: 'Cancelled', support_notes: 'Customer changed requirements', current_stage: 'Cancelled' },
   { id: 'enq-3', date: '02-06-2025', expected_delivery: '05-06-2025', source: 'Walk-in', customer_type: 'Retail', quote_assigned_to: 'Nicey', customer_name: 'Naveen', phone: '7349091878', job_specification: 'Stickers - Ready to print Size - 60x150mm...', amount: 3000, amount_note: '(with lamination 3600)', prepress: '-', dn_no: '-', advance_remarks: 'Cancelled', status: 'Cancelled', is_starred: false, costing_status: 'Cancelled', support_notes: 'Price negotiation failed', current_stage: 'Cancelled' },
@@ -826,7 +826,7 @@ export const INITIAL_DISPATCH_ROUTES = [
   { id: 'route-5', name: 'Unassigned Route', jobs_count: 2, total_qty: 600, total_amount: 8800, status: 'Pending' },
 ];
 
-export const INITIAL_ROUTE_JOBS = [
+const DEMO_ROUTE_JOBS = [
   { id: 'rj-1', route_id: 'route-1', job_no: 'JO-1024', customer: 'Star Innovative', product: 'Brochure', route_qty: 2000, dispatched: 0, balance: 2000, cod_amount: 4500, ack_status: 'Pending', status: 'Pending' },
   { id: 'rj-2', route_id: 'route-1', job_no: 'JO-1025', customer: 'Blooming Kids', product: 'Books', route_qty: 1500, dispatched: 500, balance: 1000, cod_amount: 3800, ack_status: 'Pending', status: 'Pending' },
   { id: 'rj-3', route_id: 'route-1', job_no: 'JO-1026', customer: 'Ayodhya Residency', product: 'Flyers', route_qty: 750, dispatched: 0, balance: 750, cod_amount: 2200, ack_status: 'Pending', status: 'Pending' },
@@ -848,7 +848,7 @@ export const INITIAL_VEHICLES = [
   { id: 'veh-3', reg_no: 'KA 51 EF 9012', driver_name: 'Manjunath', driver_phone: '+91 98450 99883', vehicle_type: 'Electric 3-Wheeler Loader', capacity_boxes: 30, status: 'Available' },
 ];
 
-export const INITIAL_TRIP_SHEETS = [
+const DEMO_TRIP_SHEETS = [
   {
     id: 'trip-101',
     trip_number: 'TS-2026-042',
@@ -949,7 +949,7 @@ export const INITIAL_OWNER_METRICS = {
 };
 
 // Module 2: Customer Support & Costing Coordination
-export const INITIAL_COSTING_REQUESTS = [
+const DEMO_COSTING_REQUESTS = [
   {
     id: 'cost-1',
     enquiry_id: 'enq-9',
@@ -992,7 +992,7 @@ export const INITIAL_COSTING_REQUESTS = [
 ];
 
 // Module 4: Sales Order Booking & Confirmation
-export const INITIAL_SALES_BOOKINGS = [
+const DEMO_SALES_BOOKINGS = [
   {
     id: 'sb-101',
     booking_number: 'SO-2026-0811',
@@ -1076,7 +1076,7 @@ export const INITIAL_SALES_BOOKINGS = [
 ];
 
 // Module 5: Prepress & Artwork Approval
-export const INITIAL_PREPRESS_JOBS = [
+const DEMO_PREPRESS_JOBS = [
   {
     id: 'prep-1',
     job_ticket_number: 'JT-2026-001',
@@ -1131,10 +1131,12 @@ export const INITIAL_PREPRESS_JOBS = [
 ];
 
 // Module 8: Finishing Operations
-export const INITIAL_FINISHING_OPS = [
+const DEMO_FINISHING_OPS = [
   {
     id: 'fin-op-1',
     job_ticket_number: 'JT-2026-001',
+    job_title: 'Annual Medical Conference Brochure (16 Pages A4)',
+    customer_name: 'Apex Healthcare Pvt Ltd',
     activity_type: 'Lamination', // Cutting, Folding, Lamination, Binding, Punching, Pasting
     workcenter: 'Thermal Laminator 30"',
     operator_name: 'Anil Kumar',
@@ -1149,6 +1151,8 @@ export const INITIAL_FINISHING_OPS = [
   {
     id: 'fin-op-2',
     job_ticket_number: 'JT-2026-001',
+    job_title: 'Annual Medical Conference Brochure (16 Pages A4)',
+    customer_name: 'Apex Healthcare Pvt Ltd',
     activity_type: 'Folding & Center Pin Stitching',
     workcenter: 'Heidelberg Folder & Stitcher',
     operator_name: 'Anil Kumar',
@@ -1163,6 +1167,8 @@ export const INITIAL_FINISHING_OPS = [
   {
     id: 'fin-op-3',
     job_ticket_number: 'JT-2026-002',
+    job_title: 'Gourmet Pastry Box Packaging (5000 Pcs)',
+    customer_name: 'FreshBakes Confectionery',
     activity_type: 'Die Punching',
     workcenter: 'Automatic Die Cutting Unit',
     operator_name: 'Ramu',
@@ -1177,6 +1183,8 @@ export const INITIAL_FINISHING_OPS = [
   {
     id: 'fin-op-4',
     job_ticket_number: 'JT-2026-004',
+    job_title: 'Autumn Fashion Lookbook Cards (1000 Sets)',
+    customer_name: 'UrbanStyle Boutique',
     activity_type: 'Gold Foil Stamping',
     workcenter: 'Associate - Sri Venkateshwara Foiling',
     operator_name: 'Outsourced Partner',
@@ -1221,7 +1229,7 @@ export const INITIAL_ASSOCIATES = [
   }
 ];
 
-export const INITIAL_OUTSOURCE_CHALLANS = [
+const DEMO_OUTSOURCE_CHALLANS = [
   {
     id: 'osc-101',
     challan_number: 'DC-OUT-2026-018',
@@ -1255,7 +1263,7 @@ export const INITIAL_OUTSOURCE_CHALLANS = [
 ];
 
 // Module 10: Excess-to-Stock Hand-off from QC / Packing
-export const INITIAL_EXCESS_STOCK = [
+const DEMO_EXCESS_STOCK = [
   {
     id: 'exs-1',
     job_ticket_number: 'JT-2026-002',
@@ -1281,7 +1289,7 @@ export const INITIAL_EXCESS_STOCK = [
 ];
 
 // Module 15: Customer Review, Rejection, Replacement & Refund
-export const INITIAL_CUSTOMER_REJECTIONS = [
+const DEMO_CUSTOMER_REJECTIONS = [
   {
     id: 'rej-1',
     rejection_number: 'CR-2026-005',
@@ -1321,7 +1329,7 @@ export const INITIAL_CUSTOMER_REJECTIONS = [
 ];
 
 // Module 16: Notification & Communication Automation
-export const INITIAL_NOTIFICATIONS_LOG = [
+const DEMO_NOTIFICATIONS_LOG = [
   {
     id: 'notif-1',
     recipient_name: 'Dr. Sameer Malhotra',
@@ -1442,3 +1450,56 @@ export const WORKFLOW_CONTROL_GATES = [
   },
 ];
 
+
+// Clean Slate: Fresh pipeline starts with 0 jobs across all stages
+export const INITIAL_PURCHASE_REQUESTS = [];
+export const INITIAL_QUOTES = [];
+export const INITIAL_DESIGN_PROOFS = [];
+export const INITIAL_JOB_ORDERS = [];
+export const INITIAL_WORKSTATION_LOGS = [];
+export const INITIAL_MATERIAL_RESERVATIONS = [];
+export const INITIAL_ISSUES = [];
+export const INITIAL_DISPATCH = [];
+export const INITIAL_INVOICES = [];
+export const INITIAL_PAYMENT_RECEIPTS = [];
+export const INITIAL_CUSTOMER_FEEDBACK = [];
+export const INITIAL_TASKS = [];
+export const INITIAL_ALERTS = [];
+export const INITIAL_ENQUIRIES = [];
+export const INITIAL_ROUTE_JOBS = [];
+export const INITIAL_TRIP_SHEETS = [];
+export const INITIAL_COSTING_REQUESTS = [];
+export const INITIAL_SALES_BOOKINGS = [];
+export const INITIAL_PREPRESS_JOBS = [];
+export const INITIAL_FINISHING_OPS = [];
+export const INITIAL_OUTSOURCE_CHALLANS = [];
+export const INITIAL_EXCESS_STOCK = [];
+export const INITIAL_CUSTOMER_REJECTIONS = [];
+export const INITIAL_NOTIFICATIONS_LOG = [];
+
+export const DEMO_PIPELINE_DATA = {
+  INITIAL_PURCHASE_REQUESTS: DEMO_PURCHASE_REQUESTS,
+  INITIAL_QUOTES: DEMO_QUOTES,
+  INITIAL_DESIGN_PROOFS: DEMO_DESIGN_PROOFS,
+  INITIAL_JOB_ORDERS: DEMO_JOB_ORDERS,
+  INITIAL_WORKSTATION_LOGS: DEMO_WORKSTATION_LOGS,
+  INITIAL_MATERIAL_RESERVATIONS: DEMO_MATERIAL_RESERVATIONS,
+  INITIAL_ISSUES: DEMO_ISSUES,
+  INITIAL_DISPATCH: DEMO_DISPATCH,
+  INITIAL_INVOICES: DEMO_INVOICES,
+  INITIAL_PAYMENT_RECEIPTS: DEMO_PAYMENT_RECEIPTS,
+  INITIAL_CUSTOMER_FEEDBACK: DEMO_CUSTOMER_FEEDBACK,
+  INITIAL_TASKS: DEMO_TASKS,
+  INITIAL_ALERTS: DEMO_ALERTS,
+  INITIAL_ENQUIRIES: DEMO_ENQUIRIES,
+  INITIAL_ROUTE_JOBS: DEMO_ROUTE_JOBS,
+  INITIAL_TRIP_SHEETS: DEMO_TRIP_SHEETS,
+  INITIAL_COSTING_REQUESTS: DEMO_COSTING_REQUESTS,
+  INITIAL_SALES_BOOKINGS: DEMO_SALES_BOOKINGS,
+  INITIAL_PREPRESS_JOBS: DEMO_PREPRESS_JOBS,
+  INITIAL_FINISHING_OPS: DEMO_FINISHING_OPS,
+  INITIAL_OUTSOURCE_CHALLANS: DEMO_OUTSOURCE_CHALLANS,
+  INITIAL_EXCESS_STOCK: DEMO_EXCESS_STOCK,
+  INITIAL_CUSTOMER_REJECTIONS: DEMO_CUSTOMER_REJECTIONS,
+  INITIAL_NOTIFICATIONS_LOG: DEMO_NOTIFICATIONS_LOG,
+};

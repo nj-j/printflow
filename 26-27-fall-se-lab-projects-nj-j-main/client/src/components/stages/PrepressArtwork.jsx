@@ -36,6 +36,9 @@ import {
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
 import { RushBadge } from '../common/RushBadge';
+import { resolveDefaultPressMachine } from '../../utils/machineRouting';
+
+import { STAGES, normalizeStage } from '../../utils/stageConstants';
 
 export const PrepressArtwork = () => {
   const {
@@ -139,13 +142,9 @@ export const PrepressArtwork = () => {
     if (!job) return false;
     if (job.released_to_press) return true;
     const linkedJob = jobOrders.find(j => j.job_ticket_number === job.job_ticket_number);
-    if (
-      linkedJob?.current_stage === 'PressRun' ||
-      linkedJob?.current_stage === 'FinishingQC' ||
-      linkedJob?.current_stage === 'DispatchReady' ||
-      linkedJob?.current_stage === 'Completed'
-    ) {
-      return true;
+    if (linkedJob) {
+      const s = normalizeStage(linkedJob.current_stage);
+      return s === STAGES.PRESS || s === STAGES.FINISHING || s === STAGES.QC || s === STAGES.DISPATCH || s === STAGES.COMPLETED;
     }
     return false;
   };
@@ -241,8 +240,8 @@ export const PrepressArtwork = () => {
         job_ticket_number: job.job_ticket_number,
         customer_name: job.customer_name,
         job_title: `${job.artwork_type} for ${job.customer_name}`,
-        print_quantity: 3000,
-        assigned_press_machine: 'Lithrone 26 (Ramamurthy Nagar Plant)',
+        print_quantity: job.print_quantity || 3000,
+        assigned_press_machine: job.assigned_press_machine || job.target_machine || resolveDefaultPressMachine(job),
         target_completion_date: '2026-08-28T18:00:00Z',
         paper_details: '130 GSM Gloss Art Paper (23" x 36") - 6.5 Reams',
         color_spec: '4/4 Front & Back (Process CMYK)',
@@ -398,7 +397,7 @@ export const PrepressArtwork = () => {
         priority: job.is_rush_order ? 'Urgent' : 'Normal',
         is_rush_order: !!job.is_rush_order,
         queue_position: jobOrders.length + 1,
-        assigned_press_machine: 'Komori Lithrone GL-40 (5-Color + Coater)',
+        assigned_press_machine: job.assigned_press_machine || job.target_machine || resolveDefaultPressMachine(job),
         assigned_operator: 'Rajesh Nair',
         created_at: new Date().toISOString(),
         target_completion_date: new Date(Date.now() + 86400000 * 2).toISOString()
@@ -433,7 +432,7 @@ export const PrepressArtwork = () => {
         priority: 'Normal',
         is_rush_order: false,
         queue_position: jobOrders.length + 1,
-        assigned_press_machine: 'Komori Lithrone GL-40 (5-Color + Coater)',
+        assigned_press_machine: job.assigned_press_machine || job.target_machine || resolveDefaultPressMachine(job),
         assigned_operator: 'Rajesh Nair',
         created_at: new Date().toISOString(),
         target_completion_date: new Date(Date.now() + 86400000 * 2).toISOString()
@@ -512,7 +511,7 @@ export const PrepressArtwork = () => {
         priority: job.is_rush_order ? 'Urgent' : 'Normal',
         is_rush_order: !!job.is_rush_order,
         queue_position: jobOrders.length + 1,
-        assigned_press_machine: 'Komori Lithrone GL-40 (5-Color + Coater)',
+        assigned_press_machine: job.assigned_press_machine || job.target_machine || resolveDefaultPressMachine(job),
         assigned_operator: 'Rajesh Nair',
         created_at: new Date().toISOString(),
         target_completion_date: new Date(Date.now() + 86400000 * 2).toISOString()
@@ -868,7 +867,7 @@ export const PrepressArtwork = () => {
                           <div className="flex items-center justify-center gap-1.5">
                             {(() => {
                               const linkedJob = jobOrders.find(j => j.job_ticket_number === job.job_ticket_number);
-                              const isInPress = linkedJob?.current_stage === 'PressRun' || linkedJob?.current_stage === 'FinishingQC' || linkedJob?.current_stage === 'DispatchReady' || job.released_to_press;
+                              const isInPress = linkedJob?.current_stage === 'PressRun' || linkedJob?.current_stage === 'Finishing' || linkedJob?.current_stage === 'QualityControl' || linkedJob?.current_stage === 'FinishingQC' || linkedJob?.current_stage === 'DispatchReady' || job.released_to_press;
                               const isAuthorized = job.production_release_authorized;
 
                               if (isInPress) {
@@ -1199,7 +1198,7 @@ export const PrepressArtwork = () => {
                                   {/* One-click Action Button on Condensed Card */}
                                   {(() => {
                                     const linkedJob = jobOrders.find(j => j.job_ticket_number === job.job_ticket_number);
-                                    const isInPress = linkedJob?.current_stage === 'PressRun' || linkedJob?.current_stage === 'FinishingQC' || linkedJob?.current_stage === 'DispatchReady' || job.released_to_press;
+                                    const isInPress = linkedJob?.current_stage === 'PressRun' || linkedJob?.current_stage === 'Finishing' || linkedJob?.current_stage === 'QualityControl' || linkedJob?.current_stage === 'FinishingQC' || linkedJob?.current_stage === 'DispatchReady' || job.released_to_press;
 
                                     return (
                                       <div className="pt-1 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
@@ -1472,7 +1471,8 @@ export const PrepressArtwork = () => {
                                     <div className="flex items-center justify-between gap-1.5">
                                       {(() => {
                                         const linkedJob = jobOrders.find(j => j.job_ticket_number === job.job_ticket_number);
-                                        const isInPress = linkedJob?.current_stage === 'PressRun' || linkedJob?.current_stage === 'FinishingQC' || linkedJob?.current_stage === 'DispatchReady' || job.released_to_press;
+                                        const s = normalizeStage(linkedJob?.current_stage);
+                                        const isInPress = s === STAGES.PRESS || s === STAGES.FINISHING || s === STAGES.QC || s === STAGES.DISPATCH || s === STAGES.COMPLETED || job.released_to_press;
 
                                         if (isInPress) {
                                           return (
@@ -1633,7 +1633,7 @@ export const PrepressArtwork = () => {
                       </tr>
                       <tr className="bg-slate-50/50">
                         <td className="py-2.5 px-3 font-semibold text-slate-500">Assigned Press Machine:</td>
-                        <td className="py-2.5 px-3 font-medium text-slate-800">{activeJob.assigned_press_machine || 'Ryobi 32 (Ramamurthy Nagar Plant)'}</td>
+                        <td className="py-2.5 px-3 font-medium text-slate-800">{activeJob.assigned_press_machine || activeJob.target_machine || resolveDefaultPressMachine(activeJob)}</td>
                       </tr>
                       <tr className="bg-white">
                         <td className="py-2.5 px-3 font-semibold text-slate-500">Paper Substrate / Stock:</td>

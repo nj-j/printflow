@@ -26,6 +26,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { TripSheetModal } from '../common/TripSheetModal';
 import { RushBadge } from '../common/RushBadge';
+import { STAGES, normalizeStage } from '../../utils/stageConstants';
 
 export const DeliveryDispatchPlanning = () => {
   const {
@@ -35,6 +36,8 @@ export const DeliveryDispatchPlanning = () => {
     vehicles,
     tripSheets,
     createTripSheet,
+    updateJobDeliveryStatus,
+    completeTripSheet,
     jobOrders,
     openQCFlagModal,
     issues,
@@ -81,12 +84,40 @@ export const DeliveryDispatchPlanning = () => {
   };
 
   // Master queues across the entire plant (no route silos)
-  const allPendingJobs = (routeJobs || []).filter(j => !isJobOnTrip(j));
-  const allDispatchedJobs = (routeJobs || []).filter(j => isJobOnTrip(j));
+  // Ensure any jobOrders in STAGES.DISPATCH that are not yet in routeJobs are seamlessly included in the dispatch queue
+  const mergedRouteJobs = React.useMemo(() => {
+    const existingJobNos = new Set((routeJobs || []).map(r => r.job_no));
+    const extraJobs = (jobOrders || [])
+      .filter(j => normalizeStage(j.current_stage) === STAGES.DISPATCH && !existingJobNos.has(j.job_ticket_number))
+      .map(j => {
+        const isJobInTransit = j.delivery_status === 'In-Transit' || Boolean(j.trip_sheet_number);
+        return {
+          id: `rj-${j.id || j.job_ticket_number}`,
+          route_id: 'route-1',
+          job_no: j.job_ticket_number || j.id,
+          customer: j.customer_name || 'Customer',
+          product: j.job_title || j.job_name || 'Commercial Print Order',
+          route_qty: Number(j.print_quantity || 1000),
+          dispatched: isJobInTransit ? Number(j.print_quantity || 1000) : 0,
+          balance: isJobInTransit ? 0 : Number(j.print_quantity || 1000),
+          cod_amount: Number(j.balance_due || j.balance || 0),
+          ack_status: isJobInTransit ? 'Dispatched' : 'Pending',
+          status: isJobInTransit ? 'In-Transit' : 'Ready',
+          area: j.delivery_area || j.area || 'Bengaluru Central',
+          assigned_to_trip: isJobInTransit,
+          trip_number: j.trip_sheet_number || null
+        };
+      });
+
+    return [...extraJobs, ...(routeJobs || [])];
+  }, [routeJobs, jobOrders]);
+
+  const allPendingJobs = (mergedRouteJobs || []).filter(j => !isJobOnTrip(j));
+  const allDispatchedJobs = (mergedRouteJobs || []).filter(j => isJobOnTrip(j));
 
   // Available unique areas for dropdown filter
   const availableAreas = Array.from(
-    new Set((routeJobs || []).map(j => getAreaName(j)).filter(Boolean))
+    new Set((mergedRouteJobs || []).map(j => getAreaName(j)).filter(Boolean))
   ).sort();
 
   // KPI calculations
@@ -96,8 +127,10 @@ export const DeliveryDispatchPlanning = () => {
     const matchedJob = jobOrders?.find(j => j.job_ticket_number === job.job_no);
     return resolveJobRushStatus(matchedJob || job);
   });
-  const inTransitTripsCount = (tripSheets || []).length;
-  const activeVehiclesOnRoad = vehicles?.filter(v => v.status === 'On Trip')?.length || (allDispatchedJobs.length > 0 ? 1 : 0);
+  const inTransitTripsCount = (tripSheets || []).filter(t => t.status !== 'Completed').length;
+  const deliveredJobsCount = allDispatchedJobs.filter(j => j.status === 'Delivered' || j.ack_status === 'Delivered').length;
+  const inTransitJobsCount = allDispatchedJobs.length - deliveredJobsCount;
+  const activeVehiclesOnRoad = vehicles?.filter(v => v.status === 'On Trip')?.length || (inTransitJobsCount > 0 ? 1 : 0);
 
   // Filter pending jobs by search, area, and rush
   const filteredPendingJobs = allPendingJobs.filter(job => {
@@ -125,6 +158,8 @@ export const DeliveryDispatchPlanning = () => {
       job.customer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       job.product?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       job.trip_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.ack_status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       area.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesArea = selectedAreaFilter === 'ALL' || area === selectedAreaFilter;
@@ -287,10 +322,10 @@ export const DeliveryDispatchPlanning = () => {
               On Road / In-Transit
             </div>
             <div className="text-lg font-black text-slate-900 tracking-tight">
-              {inTransitTripsCount} <span className="text-xs font-normal text-slate-500">Trips</span>
+              {inTransitTripsCount} <span className="text-xs font-normal text-slate-500">Active Trips</span>
             </div>
             <div className="text-[10px] text-slate-500 font-mono">
-              {allDispatchedJobs.length} jobs assigned • {activeVehiclesOnRoad} vehicles out
+              {inTransitJobsCount} on road • {deliveredJobsCount} delivered
             </div>
           </div>
         </div>
@@ -609,18 +644,36 @@ export const DeliveryDispatchPlanning = () => {
                         <td className="p-2.5 text-right font-mono font-bold text-slate-900">
                           ₹ {(job.cod_amount || 0).toLocaleString()}
                         </td>
-                        <td className="p-2.5 text-center">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold ${
-                              job.ack_status === 'Confirmed'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : job.ack_status === 'Dispatched'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : 'bg-slate-100 text-slate-600 border border-slate-200'
-                            }`}
-                          >
-                            {job.ack_status || 'Pending'}
-                          </span>
+                        <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          {viewMode === 'pending' ? (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold ${
+                                job.ack_status === 'Confirmed'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : job.ack_status === 'Dispatched'
+                                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}
+                            >
+                              {job.ack_status || 'Pending'}
+                            </span>
+                          ) : (
+                            <div className="inline-flex items-center justify-center">
+                              <select
+                                value={(job.ack_status === 'Delivered' || job.status === 'Delivered') ? 'Delivered' : 'Dispatched'}
+                                onChange={(e) => updateJobDeliveryStatus && updateJobDeliveryStatus(job.job_no, e.target.value)}
+                                className={`h-6 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border cursor-pointer focus:outline-none transition shadow-2xs ${
+                                  (job.ack_status === 'Delivered' || job.status === 'Delivered')
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                                    : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
+                                }`}
+                                title="Update delivery status between Dispatched and Delivered on completion of trip"
+                              >
+                                <option value="Dispatched">Dispatched</option>
+                                <option value="Delivered">✓ Delivered</option>
+                              </select>
+                            </div>
+                          )}
                         </td>
                         <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                           {viewMode === 'pending' ? (
@@ -633,7 +686,7 @@ export const DeliveryDispatchPlanning = () => {
                                   job_ticket_number: job.job_no,
                                   customer_name: job.customer,
                                   job_title: job.product,
-                                  current_stage: 'DispatchReady'
+                                  current_stage: STAGES.DISPATCH
                                 }, 'Delivery & Dispatch');
                               }}
                               className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer mx-auto"
@@ -643,7 +696,7 @@ export const DeliveryDispatchPlanning = () => {
                               <span>QC Flag</span>
                             </button>
                           ) : (
-                            <div className="flex items-center justify-center gap-1.5">
+                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
                               {job.trip_number && (
                                 <button
                                   type="button"
@@ -651,7 +704,7 @@ export const DeliveryDispatchPlanning = () => {
                                     const foundTrip = tripSheets.find(t => t.trip_number === job.trip_number || t.id === job.trip_id);
                                     if (foundTrip) {
                                       setCreatedTrip(foundTrip);
-                                      setCreatedTripJobs(routeJobs.filter(j => foundTrip.selected_job_ids?.includes(j.job_no)));
+                                      setCreatedTripJobs(mergedRouteJobs.filter(j => foundTrip.selected_job_ids?.includes(j.job_no)));
                                       setIsTripModalOpen(true);
                                     }
                                   }}
@@ -661,10 +714,26 @@ export const DeliveryDispatchPlanning = () => {
                                   {job.trip_number}
                                 </button>
                               )}
+                              {(job.ack_status === 'Delivered' || job.status === 'Delivered') ? (
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded text-[10px] font-mono font-bold flex items-center gap-0.5">
+                                  <CheckCircle2 size={10} className="text-emerald-600" />
+                                  <span>Delivered</span>
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => updateJobDeliveryStatus && updateJobDeliveryStatus(job.job_no, 'Delivered')}
+                                  className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800 border border-emerald-300 rounded text-[10px] font-mono font-bold transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                                  title="Mark order as Delivered on completion of trip"
+                                >
+                                  <CheckCircle2 size={10} className="text-emerald-600" />
+                                  <span>Mark Delivered</span>
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => handleRecallJob(job)}
-                                className="text-[10px] text-slate-400 hover:text-rose-600 underline font-mono cursor-pointer"
+                                className="text-[10px] text-slate-400 hover:text-rose-600 underline font-mono cursor-pointer ml-1"
                                 title="Recall back to pending queue"
                               >
                                 Recall
@@ -867,6 +936,12 @@ export const DeliveryDispatchPlanning = () => {
           trip={createdTrip}
           jobs={createdTripJobs}
           onClose={() => setIsTripModalOpen(false)}
+          onCompleteTrip={(tripRef) => {
+            if (completeTripSheet) {
+              completeTripSheet(tripRef);
+            }
+            setIsTripModalOpen(false);
+          }}
         />
       )}
     </div>

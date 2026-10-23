@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Receipt,
-  DollarSign,
   Printer,
   FileText,
   Clock,
@@ -24,7 +23,8 @@ export const AccountsBilling = () => {
     setQrModalData,
     setActiveTab,
     activeSubTab,
-    setActiveSubTab
+    setActiveSubTab,
+    jobOrders
   } = useApp();
 
   // Document Type Filter: 'invoices' (GST Invoicing) or 'receipts' (Receipts & Advances)
@@ -33,12 +33,62 @@ export const AccountsBilling = () => {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
   const [selectedReceiptFilter, setSelectedReceiptFilter] = useState('All');
 
-  const totalInvoiced = invoices.reduce((sum, i) => sum + (i.grand_total || 0), 0);
+  // Merge active job orders into invoices to ensure every booked / production / dispatched order with an advance or due balance is immediately represented
+  const mergedInvoices = React.useMemo(() => {
+    const existingTicketMap = new Map();
+    (invoices || []).forEach(inv => {
+      if (inv.job_ticket_number) existingTicketMap.set(inv.job_ticket_number, inv);
+      if (inv.job_order_id) existingTicketMap.set(inv.job_order_id, inv);
+    });
+
+    const extraInvoices = [];
+    (jobOrders || []).forEach((job, idx) => {
+      const ticket = job.job_ticket_number || job.id;
+      if (!existingTicketMap.has(ticket) && !existingTicketMap.has(job.id)) {
+        const grandTotal = Number(job.total_cost || job.order_total || job.amount || ((job.advance_paid || 0) + (job.balance_due || 0)) || 9032);
+        const advancePaid = Number(job.advance_paid || 0);
+        const balanceDue = Number(job.balance_due !== undefined ? job.balance_due : Math.max(0, grandTotal - advancePaid));
+        const taxable = Math.round(grandTotal / 1.12);
+        const cgst = Math.round((grandTotal - taxable) / 2);
+        const sgst = grandTotal - taxable - cgst;
+        const invNumber = `INV-2026-${String(891 + (invoices || []).length + idx).padStart(4, '0')}`;
+
+        extraInvoices.push({
+          id: `inv-${job.id || Date.now()}-${idx}`,
+          invoice_number: invNumber,
+          job_order_id: job.id,
+          job_ticket_number: ticket,
+          customer_id: job.customer_id || 'cust-generic',
+          customer_name: job.customer_name || 'Valued Customer',
+          invoice_type: 'GST_Tax_Invoice',
+          hsn_code: '49111010 (Commercial Print Materials)',
+          subtotal: taxable,
+          rush_fee_amount: job.is_rush_order ? 1500 : 0,
+          taxable_amount: taxable,
+          cgst_percent: 6,
+          cgst_amount: cgst,
+          sgst_percent: 6,
+          sgst_amount: sgst,
+          igst_amount: 0,
+          grand_total: grandTotal,
+          advance_paid: advancePaid,
+          balance_due: balanceDue,
+          payment_status: balanceDue <= 0 ? 'Paid' : (advancePaid > 0 ? 'Partial' : 'Unpaid'),
+          due_date: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
+          issued_at: job.created_at || new Date().toISOString(),
+        });
+      }
+    });
+
+    return [...extraInvoices, ...(invoices || [])];
+  }, [invoices, jobOrders]);
+
+  const totalInvoiced = mergedInvoices.reduce((sum, i) => sum + (i.grand_total || 0), 0);
   const totalCollected = paymentReceipts.reduce((sum, r) => sum + (r.amount_paid || 0), 0);
-  const totalOutstanding = invoices.reduce((sum, i) => sum + (i.balance_due || 0), 0);
+  const totalOutstanding = mergedInvoices.reduce((sum, i) => sum + (i.balance_due || 0), 0);
 
   // Filtered Invoices
-  const filteredInvoices = invoices.filter(inv => {
+  const filteredInvoices = mergedInvoices.filter(inv => {
     const q = searchQuery.toLowerCase();
     const matchesSearch = !searchQuery ||
       inv.invoice_number?.toLowerCase().includes(q) ||
@@ -86,7 +136,7 @@ export const AccountsBilling = () => {
     });
   };
 
-  const pendingInvoicesCount = invoices.filter(i => i.payment_status !== 'Paid').length;
+  const pendingInvoicesCount = mergedInvoices.filter(i => i.payment_status !== 'Paid').length;
 
   return (
     <div className="space-y-3">
@@ -158,7 +208,7 @@ export const AccountsBilling = () => {
             <div className="kpi-info">
               <span className="kpi-label">Total Invoiced Billed</span>
               <div className="kpi-value">₹{totalInvoiced.toLocaleString()}</div>
-              <span className="kpi-sub text-muted">{invoices.length} Invoices Issued</span>
+              <span className="kpi-sub text-muted">{mergedInvoices.length} Invoices Issued</span>
             </div>
           </div>
 
@@ -199,9 +249,8 @@ export const AccountsBilling = () => {
           </div>
         </div>
 
-        <div className="billing-two-col-layout">
-          {/* Main Table Card (Invoices or Receipts) */}
-          <div className="card flex-1">
+        {/* Main Table Card (Invoices or Receipts) */}
+        <div className="card w-full">
             <div className="card-header flex-wrap gap-3">
               <div className="flex items-center gap-3 flex-wrap">
                 <h3 className="card-title flex items-center gap-2">
@@ -263,7 +312,7 @@ export const AccountsBilling = () => {
                     <Receipt size={14} className={docTypeFilter === 'invoices' ? 'text-blue-600' : 'text-slate-500'} />
                     <span>GST Invoicing (HSN 49111010)</span>
                     <span className="px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold bg-blue-100 text-blue-700">
-                      {invoices.length} Invoices
+                      {mergedInvoices.length} Invoices
                     </span>
                   </button>
 
@@ -466,39 +515,7 @@ export const AccountsBilling = () => {
               </div>
             )}
           </div>
-
-          {/* Right Column: Audit Trail & Settlements Summary */}
-          <div className="card w-1/3">
-            <div className="card-header">
-              <h3 className="card-title flex items-center gap-2">
-                <DollarSign size={18} className="text-success" /> Payment Receipts Audit Trail
-              </h3>
-              <span className="badge badge-success">Settlements</span>
-            </div>
-
-            <div className="receipts-list-wrapper">
-              {paymentReceipts.map(rec => (
-                <div key={rec.id} className="receipt-card-item text-xs">
-                  <div className="flex justify-between font-bold">
-                    <span className="text-success">₹{rec.amount_paid?.toLocaleString()}</span>
-                    <span className="badge badge-secondary text-xxs">{rec.payment_method}</span>
-                  </div>
-                  <div className="font-semibold text-xs mt-1">{rec.customer_name}</div>
-                  <div className="text-xxs text-muted mt-0.5">
-                    Ref: <strong>{rec.invoice_number}</strong> | Type: {rec.receipt_type}
-                  </div>
-                  <div className="text-xxs text-muted">
-                    Txn ID: {rec.transaction_ref}
-                  </div>
-                  <div className="text-xxs text-muted mt-0.5">
-                    {new Date(rec.payment_date).toLocaleString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };

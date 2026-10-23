@@ -39,6 +39,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
 import { RushBadge } from '../common/RushBadge';
+import { STAGES, normalizeStage } from '../../utils/stageConstants';
 
 // Master Printing Press Fleet Specifications (from airules.md Architecture)
 const MACHINE_FLEET = [
@@ -140,7 +141,8 @@ export const PrintingTerminal = () => {
     deductPaperInventory,
     openQCFlagModal,
     issues,
-    resolveJobRushStatus
+    resolveJobRushStatus,
+    enquiries
   } = useApp();
 
   // Filter paper inventory items (category === 'Paper')
@@ -153,9 +155,12 @@ export const PrintingTerminal = () => {
   const [statusFilter, setStatusFilter] = useState('active'); // 'active', 'completed', 'all'
   const [feedbackToast, setFeedbackToast] = useState(null);
 
-  const POST_PRESS_STAGES = ['FinishingQC', 'DispatchReady', 'Delivered', 'Completed'];
-  const isJobCompletedInPress = (job) => POST_PRESS_STAGES.includes(job?.current_stage);
-  const activePressJobsCount = (jobOrders || []).filter(j => !isJobCompletedInPress(j)).length;
+  const isJobInPress = (job) => normalizeStage(job?.current_stage) === STAGES.PRESS;
+  const isJobCompletedInPress = (job) => {
+    const s = normalizeStage(job?.current_stage);
+    return s === STAGES.FINISHING || s === STAGES.QC || s === STAGES.DISPATCH || s === STAGES.COMPLETED;
+  };
+  const activePressJobsCount = (jobOrders || []).filter(j => isJobInPress(j)).length;
   const completedPressJobsCount = (jobOrders || []).filter(j => isJobCompletedInPress(j)).length;
 
   // Set of job IDs currently expanded in Kanban / List cards
@@ -248,34 +253,97 @@ export const PrintingTerminal = () => {
     });
   };
 
+  // Computes live paper inventory sufficiency and compares sheets printed to target quantity from job card
+  const checkJobPaperStock = (job) => {
+    const paperState = getJobPaperState(job);
+    const selectedPaperItem = paperInventory.find(p => p.id === paperState.paperItemId) || paperInventory[0];
+    const stockOnHand = Number(selectedPaperItem?.quantity_on_hand) || 0;
+    const isReams = selectedPaperItem?.unit_of_measure?.toLowerCase().includes('ream');
+    const availableStockInSheets = isReams ? Math.round(stockOnHand * 500) : Math.round(stockOnHand);
+
+    // Match target quantity from job order or linked commercial enquiry
+    const matchedEnq = enquiries?.find(e =>
+      e.enquiry_no === job.job_ticket_number ||
+      e.id === job.job_ticket_number ||
+      (e.dn_no && `SO-2026-${e.dn_no}` === job.job_ticket_number) ||
+      (job.job_ticket_number && (job.job_ticket_number.includes(e.id) || e.id.includes(job.job_ticket_number))) ||
+      (e.dn_no && job.job_ticket_number?.includes(e.dn_no)) ||
+      (job.customer_name && e.customer_name && e.customer_name.toLowerCase().trim() === job.customer_name.toLowerCase().trim())
+    );
+
+    const parseSpecQty = (spec) => {
+      if (!spec) return 0;
+      const match = String(spec).match(/(\d+[\d,]*)\s*(nos|copies|sets|pcs|sheets)/i);
+      if (match) return parseInt(match[1].replace(/,/g, ''), 10);
+      return 0;
+    };
+
+    const targetQuantity = Number(
+      job.print_quantity ||
+      job.quantity ||
+      job.target_quantity ||
+      matchedEnq?.quantity ||
+      parseSpecQty(job.job_specification || job.job_title || matchedEnq?.job_specification) ||
+      1000
+    );
+
+    const sheetsPrinted = Number(job.sheets_used) || 0;
+    const remainingNeeded = Math.max(0, targetQuantity - sheetsPrinted);
+
+    // If sheets printed is less than target and warehouse does not have enough sheets, stock is insufficient
+    const isStockInsufficient = sheetsPrinted < targetQuantity && (availableStockInSheets < remainingNeeded || availableStockInSheets <= 0);
+
+    return {
+      paperState,
+      selectedPaperItem,
+      stockOnHand,
+      isReams,
+      availableStockInSheets,
+      targetQuantity,
+      sheetsPrinted,
+      remainingNeeded,
+      isStockInsufficient,
+      targetMet: sheetsPrinted >= targetQuantity
+    };
+  };
+
   const handleDeductPaper = (job) => {
-    const state = getJobPaperState(job);
-    const sheetsToAdd = Number(state.sheetsToAdd) || 0;
+    const {
+      paperState,
+      selectedPaperItem,
+      availableStockInSheets
+    } = checkJobPaperStock(job);
+
+    const sheetsToAdd = Number(paperState.sheetsToAdd) || 0;
     if (sheetsToAdd <= 0) {
       showNotification('Please enter a valid number of sheets to deduct.');
       return;
     }
 
-    const selectedItem = paperInventory.find(p => p.id === state.paperItemId) || paperInventory[0];
-    const itemName = selectedItem?.name || 'Paper Stock';
+    if (sheetsToAdd > availableStockInSheets) {
+      showNotification(`Cannot deduct: Requested ${sheetsToAdd.toLocaleString()} sheets exceeds available stock (${availableStockInSheets.toLocaleString()} sheets).`);
+      return;
+    }
+
+    const itemName = selectedPaperItem?.name || 'Paper Stock';
     const currentTotal = Number(job.sheets_used) || 0;
     const newTotal = currentTotal + sheetsToAdd;
 
     // Deduct from warehouse inventory in AppContext
     if (deductPaperInventory) {
-      deductPaperInventory(state.paperItemId, sheetsToAdd, job.job_ticket_number);
+      deductPaperInventory(paperState.paperItemId, sheetsToAdd, job.job_ticket_number);
     }
 
     // Update job order state with cumulative total
     updateJobOrder(job.id, {
       sheets_used: newTotal,
-      deducted_paper_item_id: state.paperItemId,
+      deducted_paper_item_id: paperState.paperItemId,
       deducted_paper_name: itemName,
       paper_deducted: true
     });
 
     // Add note to job comments
-    const isReams = selectedItem?.unit_of_measure === 'Reams';
+    const isReams = selectedPaperItem?.unit_of_measure?.toLowerCase().includes('ream');
     const reamsEquivalent = isReams ? ` (${(sheetsToAdd / 500).toFixed(2)} Reams)` : '';
     addJobComment(
       job.id,
@@ -287,7 +355,7 @@ export const PrintingTerminal = () => {
     setJobPaperUsage(prev => ({
       ...prev,
       [job.id]: {
-        ...state,
+        ...paperState,
         sheetsToAdd: '',
         lastDeducted: sheetsToAdd
       }
@@ -323,45 +391,54 @@ export const PrintingTerminal = () => {
     return 'mac-1'; // Default offset press
   };
 
-  const handleStartPressRun = (job) => {
-    advanceJobStage(
-      job.id,
-      'PressRun',
-      `Make-ready completed on ${job.assigned_press_machine}. Offset print run initiated by ${activeUser?.full_name || 'Rajesh Nair'}.`
-    );
-    showNotification(`Order ${job.job_ticket_number} is now actively RUNNING on ${job.assigned_press_machine}.`);
-  };
+  // Direct progression: Move job from Press to Finishing stage
+  const handleProceedToFinishing = (job) => {
+    const {
+      paperState,
+      selectedPaperItem,
+      availableStockInSheets,
+      targetQuantity,
+      sheetsPrinted,
+      remainingNeeded,
+      isStockInsufficient
+    } = checkJobPaperStock(job);
 
-  const handleCompletePressRun = (job) => {
-    const state = getJobPaperState(job);
-    const sheets = Number(state.sheetsUsed) || job.print_quantity || 1000;
-    const selectedItem = paperInventory.find(p => p.id === state.paperItemId);
-    const itemName = selectedItem?.name || job.paper_details || 'Paper Stock';
+    const itemName = selectedPaperItem?.name || job.paper_details || 'Paper Stock';
 
-    // Auto-deduct paper if not yet deducted
-    if (!state.isDeducted && deductPaperInventory) {
-      deductPaperInventory(state.paperItemId, sheets, job.job_ticket_number);
+    // Strict guard: Block printing and progression if inventory is insufficient
+    if (isStockInsufficient) {
+      showNotification(`Cannot print: Insufficient paper inventory of ${itemName}. Available: ${availableStockInSheets.toLocaleString()} sh, Needed: ${remainingNeeded.toLocaleString()} sh.`);
+      return;
+    }
+
+    // Auto-deduct remaining sheets from inventory if operator has not manually deducted all required sheets
+    let finalSheetsUsed = sheetsPrinted;
+    if (remainingNeeded > 0 && deductPaperInventory) {
+      deductPaperInventory(paperState.paperItemId, remainingNeeded, job.job_ticket_number);
+      finalSheetsUsed = sheetsPrinted + remainingNeeded;
       updateJobOrder(job.id, {
-        sheets_used: sheets,
-        deducted_paper_item_id: state.paperItemId,
+        sheets_used: finalSheetsUsed,
+        deducted_paper_item_id: paperState.paperItemId,
         deducted_paper_name: itemName,
         paper_deducted: true
       });
       setJobPaperUsage(prev => ({
         ...prev,
         [job.id]: {
-          ...state,
+          ...paperState,
           isDeducted: true
         }
       }));
     }
 
+    // Advance job stage directly to Finishing
     advanceJobStage(
       job.id,
-      'FinishingQC',
-      `Press run completed on ${job.assigned_press_machine} (${sheets.toLocaleString()} sheets of ${itemName} consumed and deducted from inventory by ${activeUser?.full_name || 'Rajesh Nair'}).`
+      STAGES.FINISHING,
+      `Press printing completed on ${job.assigned_press_machine} (${finalSheetsUsed.toLocaleString()} sheets consumed of ${targetQuantity.toLocaleString()} target on ${itemName}). Proceeded to Finishing by ${activeUser?.full_name || 'Rajesh Nair'}.`
     );
-    showNotification(`Order ${job.job_ticket_number} completed on press! Handed over to Finishing.`);
+
+    showNotification(`Job ${job.job_ticket_number} moved to Finishing! Reflected on Planning Kanban & Commercial Desk.`);
   };
 
   const handleReassignMachine = (jobId, targetMachineId) => {
@@ -427,8 +504,8 @@ export const PrintingTerminal = () => {
 
   // Filter jobs based on search query, filter type, and plant
   const filteredJobs = jobOrders.filter(job => {
-    // Status filter: active queue automatically excludes jobs completed on press and moved to Finishing/Dispatch
-    if (statusFilter === 'active' && isJobCompletedInPress(job)) {
+    // Status filter: active queue strictly shows jobs that have arrived at the press stage
+    if (statusFilter === 'active' && !isJobInPress(job)) {
       return false;
     }
     if (statusFilter === 'completed' && !isJobCompletedInPress(job)) {
@@ -678,9 +755,18 @@ export const PrintingTerminal = () => {
                         const isExpanded = expandedJobIds.has(job.id);
                         const isUrgent = resolveJobRushStatus(job);
                         const activeNote = getLastNote(job);
-                        const isJobRunning = job.current_stage === 'PressRun';
-                        const paperState = getJobPaperState(job);
-                        const selectedItem = paperInventory.find(p => p.id === paperState.paperItemId);
+                        const stockInfo = checkJobPaperStock(job);
+                        const {
+                          paperState,
+                          selectedPaperItem: selectedItem,
+                          availableStockInSheets,
+                          targetQuantity,
+                          sheetsPrinted: totalSheetsUsed,
+                          remainingNeeded,
+                          isStockInsufficient,
+                          targetMet
+                        } = stockInfo;
+                        const isJobRunning = job.current_stage === 'PressRun' || (totalSheetsUsed > 0 && totalSheetsUsed < targetQuantity);
                         const paperDisplayName = selectedItem?.name || job.paper_details || 'Standard Paper';
 
                         // Sequential Work Order Rank
@@ -702,21 +788,25 @@ export const PrintingTerminal = () => {
                             })
                           : '26 Aug 2026';
 
-                        const statusLabel = isJobRunning
-                          ? 'Running'
-                          : isApproved
-                            ? 'Approved'
-                            : isUrgent
-                              ? 'Rush'
-                              : 'Pending';
+                        const statusLabel = isStockInsufficient
+                          ? 'Low Stock'
+                          : isJobRunning
+                            ? 'Printing'
+                            : isApproved
+                              ? 'Approved'
+                              : isUrgent
+                                ? 'Rush'
+                                : 'Pending';
 
-                        const statusClass = isJobRunning
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse'
-                          : isApproved
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : isUrgent
-                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200';
+                        const statusClass = isStockInsufficient
+                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                          : isJobRunning
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 animate-pulse'
+                            : isApproved
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : isUrgent
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200';
 
                         return (
                           <div
@@ -738,9 +828,6 @@ export const PrintingTerminal = () => {
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-mono font-bold text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                                   {job.job_ticket_number}
-                                </span>
-                                <span className="font-mono font-bold text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200">
-                                  {versionTag}
                                 </span>
                                 {isUrgent && <RushBadge size="xs" />}
                                 {(job.qc_flagged || issues.some(i => i.job_ticket_number === job.job_ticket_number && !i.resolved)) && (
@@ -789,17 +876,18 @@ export const PrintingTerminal = () => {
                                     <span className="px-1 py-0.2 bg-slate-100 rounded text-slate-600 text-[9px]">
                                       {artworkType}
                                     </span>
-                                    {job.sheets_used > 0 ? (
-                                      <span className="font-bold text-emerald-700 text-[9px]" title={`${Number(job.sheets_used).toLocaleString()} sheets deducted`}>
-                                        {Number(job.sheets_used).toLocaleString()} sh
-                                      </span>
-                                    ) : isAuthorized ? (
-                                      <span className="font-bold text-emerald-700 text-[9px]">
-                                        {plateCount} Plt
-                                      </span>
-                                    ) : (
-                                      <span className="text-amber-700 text-[9px]">Rev</span>
-                                    )}
+                                    <span
+                                      className={`font-mono text-[9px] font-bold ${
+                                        targetMet
+                                          ? 'text-emerald-700'
+                                          : isStockInsufficient
+                                            ? 'text-rose-600'
+                                            : 'text-slate-700'
+                                      }`}
+                                      title={`Sheets Printed: ${totalSheetsUsed.toLocaleString()} / Target: ${targetQuantity.toLocaleString()} sheets`}
+                                    >
+                                      {totalSheetsUsed.toLocaleString()} / {targetQuantity.toLocaleString()} sh
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -828,52 +916,82 @@ export const PrintingTerminal = () => {
                                 {(() => {
                                   const currentPaperItem = selectedItem || paperInventory[0];
                                   const sheetsToAdd = Number(paperState.sheetsToAdd) || 0;
-                                  const isReams = currentPaperItem?.unit_of_measure === 'Reams';
+                                  const isReams = currentPaperItem?.unit_of_measure?.toLowerCase().includes('ream');
                                   const reamsEquivalent = isReams && sheetsToAdd > 0 ? (sheetsToAdd / 500).toFixed(2) : sheetsToAdd;
-                                  const totalSheetsUsed = Number(job.sheets_used) || 0;
 
                                   return (
                                     <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2 box-border w-full max-w-full overflow-hidden">
-                                      {/* Header with Total Sheets Logged badge (similar to Pre-press Logged: X hrs) */}
-                                      <div className="flex items-center justify-between text-[11px] font-bold text-blue-950 gap-1">
+                                      {/* Header with Target Quantity from Job Card next to Sheets Printed */}
+                                      <div className="flex items-center justify-between text-[11px] font-bold text-blue-950 gap-1 flex-wrap">
                                         <span className="flex items-center gap-1.5 truncate min-w-0">
                                           <Layers size={13} className="text-blue-700 shrink-0" />
                                           <span className="truncate">Paper Stock & Usage:</span>
                                         </span>
-                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-blue-100 text-blue-800 font-bold border border-blue-200 flex items-center gap-1 shrink-0">
-                                          Total Used: <b>{totalSheetsUsed.toLocaleString()} sh</b>
-                                        </span>
+                                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                                          <span
+                                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition flex items-center gap-1.5 shadow-2xs ${
+                                              targetMet
+                                                ? 'bg-emerald-100 text-emerald-900 border-emerald-400 ring-1 ring-emerald-400/60'
+                                                : 'bg-blue-100 text-blue-900 border-blue-200'
+                                            }`}
+                                            title={
+                                              targetMet
+                                                ? `Target Met! ${totalSheetsUsed.toLocaleString()} of ${targetQuantity.toLocaleString()} sheets printed`
+                                                : `Sheets Printed: ${totalSheetsUsed.toLocaleString()} / Target: ${targetQuantity.toLocaleString()} sheets`
+                                            }
+                                          >
+                                            <span>Printed: <b className={targetMet ? 'text-emerald-950 font-extrabold' : 'text-blue-950'}>{totalSheetsUsed.toLocaleString()}</b></span>
+                                            <span className={targetMet ? 'text-emerald-500' : 'text-blue-400'}>/</span>
+                                            <span>Target: <b className={targetMet ? 'text-emerald-800' : 'text-blue-700'}>{targetQuantity.toLocaleString()} sh</b></span>
+                                          </span>
+                                        </div>
                                       </div>
 
-                                      {/* "Which Paper" - Paper Dropdown Selector */}
-                                      <div className="space-y-1 w-full max-w-full">
-                                        <div className="flex items-center justify-between text-[10px] gap-1">
-                                          <label className="font-semibold text-slate-700 truncate">
-                                            Which Paper Substrate:
-                                          </label>
-                                          {currentPaperItem && (
-                                            <span className="text-slate-500 font-mono text-[9px] truncate text-right">
-                                              Stock:{' '}
-                                              <b className={currentPaperItem.quantity_on_hand <= currentPaperItem.reorder_threshold ? 'text-rose-600 font-bold' : 'text-slate-800'}>
-                                                {currentPaperItem.quantity_on_hand} {currentPaperItem.unit_of_measure}
-                                              </b>
-                                            </span>
-                                          )}
+                                      {/* Insufficient Stock Warning Alert */}
+                                      {isStockInsufficient && (
+                                        <div className="p-2 bg-rose-50 border border-rose-200 rounded text-rose-900 text-[10px] flex items-start gap-1.5 font-medium animate-in fade-in">
+                                          <AlertTriangle size={13} className="text-rose-600 shrink-0 mt-0.5" />
+                                          <div className="leading-tight">
+                                            <span className="font-bold">Insufficient Inventory: </span>
+                                            Warehouse has only <b>{availableStockInSheets.toLocaleString()} sheets</b> ({currentPaperItem.quantity_on_hand} {currentPaperItem.unit_of_measure}), but job requires <b>{remainingNeeded.toLocaleString()} more sheets</b> (Target: {targetQuantity.toLocaleString()}). Print is disabled until inventory is replenished.
+                                          </div>
                                         </div>
+                                      )}
+
+                                      {/* Paper Dropdown Selector & Stock on Hand */}
+                                      <div className="space-y-1 w-full max-w-full">
+                                        {currentPaperItem && (
+                                          <div className="flex items-center justify-end text-[10px] gap-1">
+                                            <span className="text-slate-600 font-mono text-[9px] truncate text-right">
+                                              Stock:{' '}
+                                              <b className={isStockInsufficient ? 'text-rose-600 font-bold' : currentPaperItem.quantity_on_hand <= currentPaperItem.reorder_threshold ? 'text-amber-600 font-bold' : 'text-slate-800'}>
+                                                {currentPaperItem.quantity_on_hand} {currentPaperItem.unit_of_measure} ({availableStockInSheets.toLocaleString()} sh)
+                                              </b>
+                                              {isStockInsufficient && (
+                                                <span className="ml-1 text-[8px] bg-rose-100 text-rose-700 px-1 py-0.2 rounded font-bold uppercase">
+                                                  Low Stock
+                                                </span>
+                                              )}
+                                            </span>
+                                          </div>
+                                        )}
                                         <select
                                           value={paperState.paperItemId}
                                           onChange={(e) => updateJobPaperState(job.id, 'paperItemId', e.target.value)}
                                           className="w-full max-w-full box-border bg-white border border-slate-300 rounded p-1.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-blue-500 cursor-pointer truncate"
                                         >
-                                          {paperInventory.map(item => (
-                                            <option key={item.id} value={item.id}>
-                                              {item.name} ({item.quantity_on_hand} {item.unit_of_measure} on hand)
-                                            </option>
-                                          ))}
+                                          {paperInventory.map(item => {
+                                            const itemSheets = item.unit_of_measure?.toLowerCase().includes('ream') ? item.quantity_on_hand * 500 : item.quantity_on_hand;
+                                            return (
+                                              <option key={item.id} value={item.id}>
+                                                {item.name} ({item.quantity_on_hand} {item.unit_of_measure} = {itemSheets.toLocaleString()} sh on hand)
+                                              </option>
+                                            );
+                                          })}
                                         </select>
                                       </div>
 
-                                      {/* Preset Quick-Add Buttons (similar to +0.5h, +1.0h in pre-press) */}
+                                      {/* Preset Quick-Add Buttons */}
                                       <div className="space-y-1 w-full max-w-full">
                                         <div className="flex items-center justify-between text-[10px] gap-1">
                                           <label className="font-semibold text-slate-700 truncate">
@@ -914,19 +1032,25 @@ export const PrintingTerminal = () => {
                                           )}
                                         </div>
 
-                                        {/* Deduct Button - Stays enabled so operator can repeatedly add sheets */}
+                                        {/* Deduct Button - Guarded against insufficient inventory */}
                                         <button
                                           type="button"
                                           onClick={() => handleDeductPaper(job)}
-                                          disabled={!paperState.sheetsToAdd || Number(paperState.sheetsToAdd) <= 0}
+                                          disabled={!paperState.sheetsToAdd || sheetsToAdd <= 0 || sheetsToAdd > availableStockInSheets}
                                           className="w-full max-w-full box-border py-1.5 px-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded text-[11px] transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs text-center min-w-0"
-                                          title="Reduce paper stock from warehouse inventory"
+                                          title={
+                                            sheetsToAdd > availableStockInSheets
+                                              ? `Cannot deduct: Requested ${sheetsToAdd.toLocaleString()} sheets exceeds available stock (${availableStockInSheets.toLocaleString()} sheets)`
+                                              : 'Reduce paper stock from warehouse inventory'
+                                          }
                                         >
                                           <Boxes size={12} className="shrink-0" />
                                           <span className="truncate">
-                                            {sheetsToAdd > 0
-                                              ? `Deduct +${sheetsToAdd.toLocaleString()} Sheets from Inventory`
-                                              : 'Deduct Sheets from Inventory'}
+                                            {sheetsToAdd > availableStockInSheets
+                                              ? `Exceeds Stock (${availableStockInSheets.toLocaleString()} sh available)`
+                                              : sheetsToAdd > 0
+                                                ? `Deduct +${sheetsToAdd.toLocaleString()} Sheets from Inventory`
+                                                : 'Deduct Sheets from Inventory'}
                                           </span>
                                         </button>
                                       </div>
@@ -998,27 +1122,35 @@ export const PrintingTerminal = () => {
                                   </button>
                                 </div>
 
-                                {/* Bottom Progression Action Bar */}
+                                {/* Bottom Progression Action Bar: Proceed to Next Stage (Finishing) */}
                                 <div className="pt-2 border-t border-slate-200 space-y-1.5 w-full max-w-full box-border">
-                                  {job.current_stage !== 'PressRun' ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleStartPressRun(job)}
-                                      className="w-full max-w-full box-border py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs min-w-0 text-center"
-                                    >
-                                      <Play size={13} className="shrink-0" />
-                                      <span className="truncate">Start Make-Ready & Run</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCompletePressRun(job)}
-                                      className="w-full max-w-full box-border py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs min-w-0 text-center"
-                                    >
-                                      <CheckCircle2 size={13} className="shrink-0" />
-                                      <span className="truncate">Complete & Hand Over</span>
-                                    </button>
-                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleProceedToFinishing(job)}
+                                    disabled={isStockInsufficient}
+                                    className={`w-full max-w-full box-border py-2 px-2 font-bold rounded text-xs transition flex items-center justify-center gap-1.5 shadow-xs min-w-0 text-center ${
+                                      isStockInsufficient
+                                        ? 'bg-rose-50 text-rose-700 border border-rose-300 cursor-not-allowed opacity-90'
+                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-[0.99]'
+                                    }`}
+                                    title={
+                                      isStockInsufficient
+                                        ? `Cannot print: Insufficient inventory stock (${availableStockInSheets.toLocaleString()} sheets available vs ${remainingNeeded.toLocaleString()} needed)`
+                                        : `Move job to Finishing stage (reflects on Planning Kanban, Commercial Desk, and Finishing queue)`
+                                    }
+                                  >
+                                    {isStockInsufficient ? (
+                                      <>
+                                        <AlertTriangle size={13} className="shrink-0 text-rose-600" />
+                                        <span className="truncate">Cannot Print — Insufficient Inventory</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ArrowRight size={13} className="shrink-0" />
+                                        <span className="truncate">Proceed to Next Stage: Finishing</span>
+                                      </>
+                                    )}
+                                  </button>
 
                                   <div className="flex items-center justify-end pt-1 gap-2 w-full max-w-full box-border">
                                     <button
@@ -1088,9 +1220,18 @@ export const PrintingTerminal = () => {
                       const isUrgent = resolveJobRushStatus(job);
                       const macId = getJobMachineId(job);
                       const machine = MACHINE_FLEET.find(m => m.id === macId) || MACHINE_FLEET[0];
-                      const isJobRunning = job.current_stage === 'PressRun';
-                      const paperState = getJobPaperState(job);
-                      const selectedItem = paperInventory.find(p => p.id === paperState.paperItemId);
+                      const stockInfo = checkJobPaperStock(job);
+                      const {
+                        paperState,
+                        selectedPaperItem: selectedItem,
+                        availableStockInSheets,
+                        targetQuantity,
+                        sheetsPrinted: totalSheetsUsed,
+                        remainingNeeded,
+                        isStockInsufficient,
+                        targetMet
+                      } = stockInfo;
+                      const isJobRunning = job.current_stage === 'PressRun' || (totalSheetsUsed > 0 && totalSheetsUsed < targetQuantity);
                       const paperName = selectedItem?.name || job.paper_details || 'Standard Paper';
 
                       return (
@@ -1153,23 +1294,27 @@ export const PrintingTerminal = () => {
                             </span>
                           </td>
 
-                          {/* Paper & Sheets Used (Replaces Impressions Counter Column) */}
+                          {/* Paper & Sheets Used */}
                           <td className="py-2.5 px-3 max-w-[190px]">
                             <div className="space-y-0.5">
                               <span className="font-medium text-slate-800 block truncate" title={paperName}>
                                 {paperName.split('(')[0]}
                               </span>
                               <div className="flex items-center justify-between text-[10px] font-mono">
-                                <span className="font-bold text-blue-900">
-                                  {job.sheets_used ? `${Number(job.sheets_used).toLocaleString()} sheets` : `${job.print_quantity?.toLocaleString()} target`}
+                                <span className="font-bold text-blue-900" title={`Printed: ${totalSheetsUsed.toLocaleString()} / Target: ${targetQuantity.toLocaleString()} sheets`}>
+                                  {totalSheetsUsed.toLocaleString()} / {targetQuantity.toLocaleString()} sh
                                 </span>
-                                {job.sheets_used > 0 ? (
+                                {targetMet ? (
                                   <span className="text-emerald-700 font-bold flex items-center gap-0.5 text-[9px]">
-                                    <Check size={9} /> Deducted
+                                    <Check size={9} /> Met
+                                  </span>
+                                ) : isStockInsufficient ? (
+                                  <span className="text-rose-600 font-bold flex items-center gap-0.5 text-[9px]" title={`Only ${availableStockInSheets.toLocaleString()} sh in warehouse`}>
+                                    <AlertTriangle size={9} /> Low Stock
                                   </span>
                                 ) : (
                                   <span className="text-amber-700 text-[9px] font-semibold">
-                                    Pending
+                                    {Math.min(100, Math.round((totalSheetsUsed / targetQuantity) * 100))}%
                                   </span>
                                 )}
                               </div>
@@ -1243,23 +1388,33 @@ export const PrintingTerminal = () => {
                                 <Printer size={12} />
                               </button>
 
-                              {job.current_stage !== 'PressRun' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartPressRun(job)}
-                                  className="btn btn-xxs btn-success cursor-pointer"
-                                >
-                                  Start Run
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleCompletePressRun(job)}
-                                  className="btn btn-xxs btn-primary cursor-pointer"
-                                >
-                                  Complete
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleProceedToFinishing(job)}
+                                disabled={isStockInsufficient}
+                                className={`btn btn-xxs font-bold transition flex items-center gap-1 ${
+                                  isStockInsufficient
+                                    ? 'bg-rose-100 text-rose-700 border border-rose-300 cursor-not-allowed opacity-80'
+                                    : 'btn-success cursor-pointer'
+                                }`}
+                                title={
+                                  isStockInsufficient
+                                    ? `Cannot print: Insufficient inventory (${availableStockInSheets.toLocaleString()} sh available vs ${remainingNeeded.toLocaleString()} sh needed)`
+                                    : 'Proceed to Next Stage: Finishing'
+                                }
+                              >
+                                {isStockInsufficient ? (
+                                  <>
+                                    <AlertTriangle size={10} className="text-rose-600" />
+                                    <span>Low Stock</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ArrowRight size={10} />
+                                    <span>Proceed to Finishing</span>
+                                  </>
+                                )}
+                              </button>
                             </div>
                           </td>
                         </tr>

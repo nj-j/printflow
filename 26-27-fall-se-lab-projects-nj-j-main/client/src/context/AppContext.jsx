@@ -36,10 +36,29 @@ import {
   INITIAL_MASTER_DATA,
   WORKFLOW_CONTROL_GATES
 } from '../data/initialData';
+import { resolveDefaultPressMachine } from '../utils/machineRouting';
+import {
+  STAGES,
+  CANONICAL_STAGES,
+  STAGE_CONFIG,
+  STAGE_DROPDOWN_OPTIONS,
+  normalizeStage,
+  getNextStage,
+  getPrevStage,
+  getStageDisplay
+} from '../utils/stageConstants';
 
 const AppContext = createContext(null);
 
 const STORAGE_KEY = 'PRINTFLOW_ERP_STATE_V1';
+
+export const getTodayFormattedDate = () => {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  return `${day}-${month}-${year}`;
+};
 
 export const AppProvider = ({ children }) => {
   // Load state from local storage or defaults
@@ -69,9 +88,7 @@ export const AppProvider = ({ children }) => {
       case 'press_terminal':
         return 'live_terminal';
       case 'finishing':
-        return 'bindery';
       case 'associates':
-        return 'outsourced';
       case 'finishing_qc':
         return 'bindery';
       case 'qc':
@@ -91,11 +108,10 @@ export const AppProvider = ({ children }) => {
       case 'admin_analytics':
       case 'owner_dashboard':
       case 'dashboard':
+      case 'config':
         return 'executive_oee';
       case 'notifications':
         return 'notifications';
-      case 'config':
-        return 'config';
       default:
         return 'intake';
     }
@@ -110,15 +126,13 @@ export const AppProvider = ({ children }) => {
     else if (tabId === 'estimator') { targetTab = 'commercial'; targetSubTab = 'quotes'; }
     else if (tabId === 'booking') { targetTab = 'commercial'; targetSubTab = 'booking'; }
     else if (tabId === 'production') { targetTab = 'planning'; targetSubTab = 'job_tickets'; }
-    else if (tabId === 'finishing') { targetTab = 'finishing'; targetSubTab = 'bindery'; }
-    else if (tabId === 'associates') { targetTab = 'finishing'; targetSubTab = 'outsourced'; }
-    else if (tabId === 'finishing_qc') { targetTab = 'finishing'; targetSubTab = 'bindery'; }
+    else if (tabId === 'finishing' || tabId === 'associates' || tabId === 'finishing_qc') { targetTab = 'finishing'; targetSubTab = 'bindery'; }
     else if (tabId === 'qc' || tabId === 'qc_packing' || tabId === 'qc_inspection') { targetTab = 'qc'; targetSubTab = 'qc_inspection'; }
     else if (tabId === 'procurement') { targetTab = 'inventory'; targetSubTab = 'purchase_orders'; }
     else if (tabId === 'rejections') { targetTab = 'dispatch'; targetSubTab = 'returns'; }
     else if (tabId === 'owner_dashboard' || tabId === 'dashboard') { targetTab = 'admin_analytics'; targetSubTab = 'executive_oee'; }
     else if (tabId === 'notifications') { targetTab = 'admin_analytics'; targetSubTab = 'notifications'; }
-    else if (tabId === 'config') { targetTab = 'admin_analytics'; targetSubTab = 'config'; }
+    else if (tabId === 'config') { targetTab = 'admin_analytics'; targetSubTab = 'executive_oee'; }
     else {
       targetSubTab = getDefaultSubTab(targetTab);
     }
@@ -138,15 +152,13 @@ export const AppProvider = ({ children }) => {
     else if (tabId === 'estimator') { targetTab = 'commercial'; if (!targetSubTab) targetSubTab = 'quotes'; }
     else if (tabId === 'booking') { targetTab = 'commercial'; if (!targetSubTab) targetSubTab = 'booking'; }
     else if (tabId === 'production') { targetTab = 'planning'; if (!targetSubTab) targetSubTab = 'job_tickets'; }
-    else if (tabId === 'finishing') { targetTab = 'finishing'; if (!targetSubTab) targetSubTab = 'bindery'; }
-    else if (tabId === 'associates') { targetTab = 'finishing'; if (!targetSubTab) targetSubTab = 'outsourced'; }
-    else if (tabId === 'finishing_qc') { targetTab = 'finishing'; if (!targetSubTab) targetSubTab = 'bindery'; }
+    else if (tabId === 'finishing' || tabId === 'associates' || tabId === 'finishing_qc') { targetTab = 'finishing'; if (!targetSubTab) targetSubTab = 'bindery'; }
     else if (tabId === 'qc' || tabId === 'qc_packing' || tabId === 'qc_inspection') { targetTab = 'qc'; if (!targetSubTab) targetSubTab = 'qc_inspection'; }
     else if (tabId === 'procurement') { targetTab = 'inventory'; if (!targetSubTab) targetSubTab = 'purchase_orders'; }
     else if (tabId === 'rejections') { targetTab = 'dispatch'; if (!targetSubTab) targetSubTab = 'returns'; }
     else if (tabId === 'owner_dashboard' || tabId === 'dashboard') { targetTab = 'admin_analytics'; if (!targetSubTab) targetSubTab = 'executive_oee'; }
     else if (tabId === 'notifications') { targetTab = 'admin_analytics'; if (!targetSubTab) targetSubTab = 'notifications'; }
-    else if (tabId === 'config') { targetTab = 'admin_analytics'; if (!targetSubTab) targetSubTab = 'config'; }
+    else if (tabId === 'config') { targetTab = 'admin_analytics'; if (!targetSubTab) targetSubTab = 'executive_oee'; }
 
     setActiveTabState(targetTab);
     setActiveSubTab(targetSubTab || getDefaultSubTab(targetTab));
@@ -284,13 +296,7 @@ export const AppProvider = ({ children }) => {
     const saved = localStorage.getItem(`${STORAGE_KEY}_enquiries`);
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        const existingIds = new Set(parsed.map(p => p.id));
-        const missing = INITIAL_ENQUIRIES.filter(ie => !existingIds.has(ie.id));
-        if (missing.length > 0) {
-          return [...parsed, ...missing];
-        }
-        return parsed;
+        return JSON.parse(saved);
       } catch (e) {
         return INITIAL_ENQUIRIES;
       }
@@ -378,7 +384,22 @@ export const AppProvider = ({ children }) => {
   const [isControlGatesModalOpen, setIsControlGatesModalOpen] = useState(false);
   const [isMasterEnquiryModalOpen, setIsMasterEnquiryModalOpen] = useState(false);
   const [selectedTripSheetForModal, setSelectedTripSheetForModal] = useState(null);
-  const [selectedDate, setSelectedDate] = useState('03-06-2025');
+  const [selectedDate, setSelectedDate] = useState(getTodayFormattedDate);
+  const [isManualDate, setIsManualDate] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isManualDate) {
+        setSelectedDate(getTodayFormattedDate());
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [isManualDate]);
+
+  const handleSetSelectedDate = (date) => {
+    setIsManualDate(true);
+    setSelectedDate(date);
+  };
   const [selectedSourceFilter, setSelectedSourceFilter] = useState('All Sources');
   const [activeBranch, setActiveBranch] = useState('Plant #01 • Ramamurthy Nagar');
 
@@ -513,6 +534,120 @@ export const AppProvider = ({ children }) => {
       return [...toAdd, ...updatedPrev];
     });
   }, [enquiries]);
+
+  // Synchronize all jobOrders currently in STAGES.DISPATCH into routeJobs for dispatch planning
+  useEffect(() => {
+    const dispatchJobs = (jobOrders || []).filter(j => normalizeStage(j.current_stage) === STAGES.DISPATCH);
+    if (!dispatchJobs.length) return;
+
+    setRouteJobs(prev => {
+      let changed = false;
+      let nextList = [...prev];
+
+      dispatchJobs.forEach(job => {
+        const ticket = job.job_ticket_number || job.id;
+        const exists = nextList.some(r => r.job_no === ticket || r.id === job.id);
+        if (!exists) {
+          changed = true;
+          const isJobInTransit = job.delivery_status === 'In-Transit' || Boolean(job.trip_sheet_number);
+          nextList.unshift({
+            id: `rj-${job.id || Date.now()}`,
+            route_id: 'route-1',
+            job_no: ticket,
+            customer: job.customer_name || 'Customer',
+            product: job.job_title || job.job_name || 'Commercial Print Order',
+            route_qty: Number(job.print_quantity || 1000),
+            dispatched: isJobInTransit ? Number(job.print_quantity || 1000) : 0,
+            balance: isJobInTransit ? 0 : Number(job.print_quantity || 1000),
+            cod_amount: Number(job.balance_due || job.balance || 0),
+            ack_status: isJobInTransit ? 'Dispatched' : 'Pending',
+            status: isJobInTransit ? 'In-Transit' : 'Ready',
+            area: job.delivery_area || job.area || 'Bengaluru Central',
+            assigned_to_trip: isJobInTransit,
+            trip_number: job.trip_sheet_number || null
+          });
+        }
+      });
+
+      return changed ? nextList : prev;
+    });
+  }, [jobOrders]);
+
+  // Auto-generate & synchronize GST Tax Invoices for all confirmed / production / dispatch job orders
+  useEffect(() => {
+    if (!jobOrders || jobOrders.length === 0) return;
+
+    setInvoices(prevInvoices => {
+      const existingTicketMap = new Map();
+      prevInvoices.forEach(inv => {
+        if (inv.job_ticket_number) existingTicketMap.set(inv.job_ticket_number, inv);
+        if (inv.job_order_id) existingTicketMap.set(inv.job_order_id, inv);
+      });
+
+      let changed = false;
+      let nextList = [...prevInvoices];
+
+      jobOrders.forEach((job, idx) => {
+        const ticket = job.job_ticket_number || job.id;
+        const existingInv = existingTicketMap.get(ticket) || existingTicketMap.get(job.id);
+
+        const grandTotal = Number(job.total_cost || job.order_total || job.amount || ((job.advance_paid || 0) + (job.balance_due || 0)) || 9032);
+        const advancePaid = Number(job.advance_paid || 0);
+        const balanceDue = Number(job.balance_due !== undefined ? job.balance_due : Math.max(0, grandTotal - advancePaid));
+
+        if (!existingInv) {
+          changed = true;
+          const taxable = Math.round(grandTotal / 1.12);
+          const cgst = Math.round((grandTotal - taxable) / 2);
+          const sgst = grandTotal - taxable - cgst;
+          const invNumber = `INV-2026-${String(891 + prevInvoices.length + idx).padStart(4, '0')}`;
+
+          const newInv = {
+            id: `inv-${job.id || Date.now()}-${idx}`,
+            invoice_number: invNumber,
+            job_order_id: job.id,
+            job_ticket_number: ticket,
+            customer_id: job.customer_id || 'cust-generic',
+            customer_name: job.customer_name || 'Valued Customer',
+            invoice_type: 'GST_Tax_Invoice',
+            hsn_code: '49111010 (Commercial Print Materials)',
+            subtotal: taxable,
+            rush_fee_amount: job.is_rush_order ? 1500 : 0,
+            taxable_amount: taxable,
+            cgst_percent: 6,
+            cgst_amount: cgst,
+            sgst_percent: 6,
+            sgst_amount: sgst,
+            igst_amount: 0,
+            grand_total: grandTotal,
+            advance_paid: advancePaid,
+            balance_due: balanceDue,
+            payment_status: balanceDue <= 0 ? 'Paid' : (advancePaid > 0 ? 'Partial' : 'Unpaid'),
+            due_date: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().split('T')[0],
+            issued_at: job.created_at || new Date().toISOString(),
+          };
+
+          nextList.unshift(newInv);
+        } else if (existingInv.balance_due !== balanceDue || existingInv.advance_paid !== advancePaid || existingInv.grand_total !== grandTotal) {
+          changed = true;
+          nextList = nextList.map(inv => {
+            if (inv.id === existingInv.id) {
+              return {
+                ...inv,
+                grand_total: grandTotal,
+                advance_paid: advancePaid,
+                balance_due: balanceDue,
+                payment_status: balanceDue <= 0 ? 'Paid' : (advancePaid > 0 ? 'Partial' : 'Unpaid'),
+              };
+            }
+            return inv;
+          });
+        }
+      });
+
+      return changed ? nextList : prevInvoices;
+    });
+  }, [jobOrders]);
 
   const addSalesBooking = (bookingData) => {
     const newBooking = {
@@ -667,6 +802,19 @@ export const AppProvider = ({ children }) => {
 
   const updateRouteJob = (jobId, updates) => {
     setRouteJobs(prev => prev.map(j => j.id === jobId || j.job_no === jobId ? { ...j, ...updates } : j));
+    if (updates.assigned_to_trip === false || updates.status === 'Pending') {
+      setJobOrders(prev => prev.map(job => {
+        if (job.id === jobId || job.job_ticket_number === jobId) {
+          return {
+            ...job,
+            current_stage: STAGES.DISPATCH,
+            delivery_status: 'Ready',
+            trip_sheet_number: null
+          };
+        }
+        return job;
+      }));
+    }
   };
 
   const createTripSheet = (tripData) => {
@@ -674,26 +822,57 @@ export const AppProvider = ({ children }) => {
       ...tripData,
       id: `trip-${Date.now()}`,
       trip_number: `TS-2026-0${tripSheets.length + 43}`,
+      status: 'In-Transit',
       created_at: new Date().toISOString()
     };
     setTripSheets(prev => [newTrip, ...prev]);
+
+    if (tripData.vehicle_reg) {
+      setVehicles(prev => prev.map(v => v.reg_no === tripData.vehicle_reg ? { ...v, status: 'On Trip' } : v));
+    }
+
     // Mark assigned route jobs as in-transit and assigned to trip
     if (tripData.selected_job_ids?.length) {
-      setRouteJobs(prev => prev.map(j => {
-        if (tripData.selected_job_ids.includes(j.job_no)) {
-          return {
-            ...j,
-            status: 'In-Transit',
-            ack_status: 'Dispatched',
-            dispatched: j.route_qty,
+      setRouteJobs(prev => {
+        const existingNos = new Set(prev.map(j => j.job_no));
+        const missingFromRouteJobs = (jobOrders || [])
+          .filter(j => tripData.selected_job_ids.includes(j.job_ticket_number) && !existingNos.has(j.job_ticket_number))
+          .map(j => ({
+            id: `rj-${j.id || Date.now()}`,
+            route_id: 'route-1',
+            job_no: j.job_ticket_number || j.id,
+            customer: j.customer_name || 'Customer',
+            product: j.job_title || j.job_name || 'Commercial Print Order',
+            route_qty: Number(j.print_quantity || 1000),
+            dispatched: Number(j.print_quantity || 1000),
             balance: 0,
+            cod_amount: Number(j.balance_due || j.balance || 0),
+            ack_status: 'Dispatched',
+            status: 'In-Transit',
             assigned_to_trip: true,
             trip_id: newTrip.id,
-            trip_number: newTrip.trip_number
-          };
-        }
-        return j;
-      }));
+            trip_number: newTrip.trip_number,
+            area: j.delivery_area || j.area || 'Bengaluru Central',
+          }));
+
+        const updated = prev.map(j => {
+          if (tripData.selected_job_ids.includes(j.job_no)) {
+            return {
+              ...j,
+              status: 'In-Transit',
+              ack_status: 'Dispatched',
+              dispatched: j.route_qty || j.balance || 0,
+              balance: 0,
+              assigned_to_trip: true,
+              trip_id: newTrip.id,
+              trip_number: newTrip.trip_number
+            };
+          }
+          return j;
+        });
+
+        return [...missingFromRouteJobs, ...updated];
+      });
 
       // Also advance stage in jobOrders if matching tickets exist
       setJobOrders(prev => prev.map(job => {
@@ -709,6 +888,187 @@ export const AppProvider = ({ children }) => {
       }));
     }
     return newTrip;
+  };
+
+  // Update Delivery Status (Dispatched <-> Delivered) for a specific job order
+  const updateJobDeliveryStatus = (jobTicketOrId, newStatus = 'Delivered') => {
+    const isDelivered = newStatus === 'Delivered';
+    const timestamp = new Date().toISOString();
+
+    let targetTripId = null;
+    let targetTripNumber = null;
+
+    // 1. Update routeJobs
+    setRouteJobs(prev => prev.map(j => {
+      if (j.job_no === jobTicketOrId || j.id === jobTicketOrId) {
+        targetTripId = j.trip_id;
+        targetTripNumber = j.trip_number;
+        return {
+          ...j,
+          status: isDelivered ? 'Delivered' : 'In-Transit',
+          ack_status: isDelivered ? 'Delivered' : 'Dispatched',
+          delivered_at: isDelivered ? timestamp : null
+        };
+      }
+      return j;
+    }));
+
+    // 2. Update jobOrders
+    setJobOrders(prev => prev.map(job => {
+      if (job.job_ticket_number === jobTicketOrId || job.id === jobTicketOrId) {
+        if (!targetTripId && job.trip_id) targetTripId = job.trip_id;
+        if (!targetTripNumber && job.trip_sheet_number) targetTripNumber = job.trip_sheet_number;
+        return {
+          ...job,
+          delivery_status: isDelivered ? 'Delivered' : 'In-Transit',
+          current_stage: isDelivered ? STAGES.COMPLETED : 'InTransit',
+          delivered_at: isDelivered ? timestamp : null
+        };
+      }
+      return job;
+    }));
+
+    // 3. Update enquiries and salesBookings
+    setEnquiries(prev => prev.map(e => {
+      const isMatch = e.enquiry_no === jobTicketOrId || e.id === jobTicketOrId || (e.dn_no && `SO-2026-${e.dn_no}` === jobTicketOrId);
+      if (isMatch) {
+        return {
+          ...e,
+          current_stage: isDelivered ? STAGES.COMPLETED : STAGES.DISPATCH,
+          status: isDelivered ? 'Completed' : 'Booked'
+        };
+      }
+      return e;
+    }));
+
+    setSalesBookings(prev => prev.map(b => {
+      if (b.booking_number === jobTicketOrId || b.id === jobTicketOrId) {
+        return {
+          ...b,
+          current_stage: isDelivered ? STAGES.COMPLETED : STAGES.DISPATCH,
+          status: isDelivered ? 'Completed' : 'Booked'
+        };
+      }
+      return b;
+    }));
+
+    // 4. Update trip sheet status if needed
+    if (targetTripId || targetTripNumber) {
+      setTripSheets(prevTrips => prevTrips.map(trip => {
+        if (trip.id === targetTripId || trip.trip_number === targetTripNumber) {
+          const allOtherDelivered = (routeJobs || []).every(rj => {
+            if (rj.trip_id === trip.id || rj.trip_number === trip.trip_number) {
+              if (rj.job_no === jobTicketOrId || rj.id === jobTicketOrId) {
+                return isDelivered;
+              }
+              return rj.status === 'Delivered' || rj.ack_status === 'Delivered';
+            }
+            return true;
+          });
+
+          if (isDelivered && allOtherDelivered) {
+            if (trip.vehicle_reg) {
+              setVehicles(vPrev => vPrev.map(v => v.reg_no === trip.vehicle_reg ? { ...v, status: 'Available' } : v));
+            }
+            return {
+              ...trip,
+              status: 'Completed',
+              completed_at: timestamp
+            };
+          } else if (!isDelivered) {
+            return {
+              ...trip,
+              status: 'In-Transit',
+              completed_at: null
+            };
+          }
+        }
+        return trip;
+      }));
+    }
+
+    addAlert({
+      alert_type: 'DeliveryAlert',
+      severity: isDelivered ? 'Success' : 'Info',
+      message: `Job ${jobTicketOrId} delivery status updated to [${isDelivered ? 'Delivered' : 'Dispatched'}].`,
+    });
+  };
+
+  // Complete an entire Trip Sheet manifest and mark all assigned orders as Delivered
+  const completeTripSheet = (tripIdOrNumber) => {
+    const timestamp = new Date().toISOString();
+    let affectedJobNos = [];
+    let vehicleReg = null;
+
+    setTripSheets(prev => prev.map(trip => {
+      if (trip.id === tripIdOrNumber || trip.trip_number === tripIdOrNumber) {
+        affectedJobNos = trip.selected_job_ids || [];
+        vehicleReg = trip.vehicle_reg;
+        return {
+          ...trip,
+          status: 'Completed',
+          completed_at: timestamp
+        };
+      }
+      return trip;
+    }));
+
+    if (vehicleReg) {
+      setVehicles(prev => prev.map(v => v.reg_no === vehicleReg ? { ...v, status: 'Available' } : v));
+    }
+
+    setRouteJobs(prev => prev.map(j => {
+      if (affectedJobNos.includes(j.job_no) || affectedJobNos.includes(j.id) || j.trip_id === tripIdOrNumber || j.trip_number === tripIdOrNumber) {
+        return {
+          ...j,
+          status: 'Delivered',
+          ack_status: 'Delivered',
+          delivered_at: timestamp
+        };
+      }
+      return j;
+    }));
+
+    setJobOrders(prev => prev.map(job => {
+      if (affectedJobNos.includes(job.job_ticket_number) || affectedJobNos.includes(job.id) || job.trip_sheet_number === tripIdOrNumber) {
+        return {
+          ...job,
+          delivery_status: 'Delivered',
+          current_stage: STAGES.COMPLETED,
+          delivered_at: timestamp
+        };
+      }
+      return job;
+    }));
+
+    setEnquiries(prev => prev.map(e => {
+      const match = affectedJobNos.some(no => e.enquiry_no === no || e.id === no || (e.dn_no && `SO-2026-${e.dn_no}` === no));
+      if (match) {
+        return { ...e, current_stage: STAGES.COMPLETED, status: 'Completed' };
+      }
+      return e;
+    }));
+
+    setSalesBookings(prev => prev.map(b => {
+      if (affectedJobNos.includes(b.booking_number) || affectedJobNos.includes(b.id)) {
+        return { ...b, current_stage: STAGES.COMPLETED, status: 'Completed' };
+      }
+      return b;
+    }));
+
+    addAlert({
+      alert_type: 'DeliveryAlert',
+      severity: 'Success',
+      message: `[TRIP COMPLETED] Trip ${tripIdOrNumber} finished. All assigned orders marked as Delivered.`,
+    });
+
+    addNotificationLog({
+      title: `Trip ${tripIdOrNumber} Completed`,
+      message: `All orders marked as Delivered and vehicle released to fleet.`,
+      channel: 'App',
+      type: 'Delivery',
+      status: 'Delivered'
+    });
   };
 
   const updateMasterData = (section, updates) => {
@@ -846,7 +1206,7 @@ export const AppProvider = ({ children }) => {
       priority: priority,
       is_rush_order: isRush,
       queue_position: newQueuePos,
-      assigned_press_machine: 'Heidelberg Speedmaster SM 74 (4-Color)',
+      assigned_press_machine: quote.assigned_press_machine || quote.target_machine || firstItem.assigned_press_machine || resolveDefaultPressMachine({ ...quote, print_quantity: firstItem.print_quantity, printing_type: quote.printing_type }),
       assigned_operator: 'Rajesh Nair',
       target_completion_date: targetDate || new Date(Date.now() + (isRush ? 12 : 48) * 3600 * 1000).toISOString(),
       created_at: new Date().toISOString(),
@@ -944,7 +1304,7 @@ export const AppProvider = ({ children }) => {
 
   // Update Job Order Generic
   const updateJobOrder = (jobId, updates) => {
-    setJobOrders(prev => prev.map(job => job.id === jobId ? { ...job, ...updates } : job));
+    setJobOrders(prev => prev.map(job => (job.id === jobId || job.job_ticket_number === jobId) ? { ...job, ...updates } : job));
   };
 
   // Add Comment and/or Log Hours for a Job
@@ -1018,11 +1378,12 @@ export const AppProvider = ({ children }) => {
 
   // 5. Advance Stage Workflow & Workstation Logging
   const advanceJobStage = (jobId, nextStage, notes = '', hoursWorked = 0) => {
+    const canonicalStage = normalizeStage(nextStage);
     const numHours = Number(hoursWorked) || 0;
     const cleanNotes = (notes || '').trim();
 
     setJobOrders(prev => prev.map(job => {
-      if (job.id !== jobId) return job;
+      if (job.id !== jobId && job.job_ticket_number !== jobId) return job;
 
       const currentTotalHours = (job.total_hours_worked || 0) + numHours;
       const newCommentObj = cleanNotes ? {
@@ -1030,15 +1391,15 @@ export const AppProvider = ({ children }) => {
         text: cleanNotes,
         author: activeUser.full_name,
         hours_logged: numHours,
-        stage: nextStage,
+        stage: canonicalStage,
         timestamp: new Date().toISOString()
       } : null;
       const updatedComments = newCommentObj ? [...(job.comments || []), newCommentObj] : (job.comments || []);
 
-      // When advancing into PressRun or Press, trigger Phase 2 Material Deduction
-      if (nextStage === 'PressRun' || nextStage === 'Press') {
+      // When advancing into Press, trigger Phase 2 Material Deduction
+      if (canonicalStage === STAGES.PRESS) {
         setMaterialReservations(resPrev => resPrev.map(res => {
-          if (res.job_order_id === jobId && !res.is_deducted) {
+          if ((res.job_order_id === jobId || res.job_order_id === job.id) && !res.is_deducted) {
             // Deduct from inventory on hand
             setInventory(invPrev => invPrev.map(item => {
               if (item.id === res.inventory_item_id) {
@@ -1055,7 +1416,7 @@ export const AppProvider = ({ children }) => {
 
       return {
         ...job,
-        current_stage: nextStage,
+        current_stage: canonicalStage,
         qc_flagged: false,
         returned_from_qc: false,
         total_hours_worked: currentTotalHours,
@@ -1067,29 +1428,153 @@ export const AppProvider = ({ children }) => {
     }));
 
     // Add workstation log
-    const targetJob = jobOrders.find(j => j.id === jobId);
+    const targetJob = jobOrders.find(j => j.id === jobId || j.job_ticket_number === jobId);
     if (targetJob) {
       const newLog = {
         id: `log-${Date.now()}`,
-        job_order_id: jobId,
+        job_order_id: targetJob.id,
         job_ticket_number: targetJob.job_ticket_number,
         operator_user_id: activeUser.id,
         operator_name: activeUser.full_name,
-        workstation_stage: nextStage,
+        workstation_stage: canonicalStage,
         machine_name: targetJob.assigned_press_machine,
         started_at: new Date().toISOString(),
-        completed_at: nextStage === 'Completed' ? new Date().toISOString() : null,
+        completed_at: canonicalStage === STAGES.COMPLETED ? new Date().toISOString() : null,
         good_impressions: targetJob.print_quantity,
-        waste_sheets_logged: nextStage === 'PressRun' ? 30 : 5,
+        waste_sheets_logged: canonicalStage === STAGES.PRESS ? 30 : 5,
         hours_worked: numHours,
-        operator_notes: notes || `Advanced to ${nextStage} by ${activeUser.full_name}`,
+        operator_notes: notes || `Advanced to ${STAGE_CONFIG[canonicalStage]?.label || canonicalStage} by ${activeUser.full_name}`,
       };
       setWorkstationLogs(prev => [newLog, ...prev]);
+
+      // Auto-manage finishing operations when advancing to Finishing
+      if (canonicalStage === STAGES.FINISHING) {
+        setFinishingOps(prev => {
+          const exists = prev.some(f => f.job_ticket_number === targetJob.job_ticket_number);
+          if (exists) {
+            return prev.map(f => f.job_ticket_number === targetJob.job_ticket_number ? { ...f, status: 'In-Progress', moved_to_qc: false } : f);
+          }
+          const newFinOp = {
+            id: `fin-op-${Date.now()}`,
+            job_ticket_number: targetJob.job_ticket_number,
+            job_title: targetJob.job_title || targetJob.job_name || targetJob.product || targetJob.job_specification || 'Commercial Print Order',
+            customer_name: targetJob.customer_name || 'Customer',
+            activity_type: targetJob.finishing_spec || 'Standard Trimming & Packing',
+            workcenter: 'Standard Finishing & Bindery Unit',
+            operator_name: 'Anil Kumar',
+            status: 'In-Progress',
+            planned_qty: targetJob.print_quantity || 1000,
+            completed_qty: 0,
+            wastage_qty: 0,
+            quality_issues: 'None',
+            started_at: new Date().toISOString(),
+            is_subcontract: false,
+            moved_to_qc: false,
+            qc_ready: false
+          };
+          return [newFinOp, ...prev];
+        });
+      }
+
+      if (canonicalStage === STAGES.QC) {
+        setFinishingOps(prev => prev.map(f => {
+          if (f.job_ticket_number === targetJob.job_ticket_number) {
+            return { ...f, status: 'Completed', moved_to_qc: true, qc_ready: true };
+          }
+          return f;
+        }));
+      }
+
+      // Auto-manage route jobs when advancing to Dispatch
+      if (canonicalStage === STAGES.DISPATCH) {
+        setRouteJobs(prev => {
+          const ticket = targetJob.job_ticket_number || targetJob.id;
+          const exists = prev.some(r => r.job_no === ticket || r.id === targetJob.id);
+          if (exists) {
+            return prev.map(r => (r.job_no === ticket || r.id === targetJob.id)
+              ? {
+                  ...r,
+                  status: 'Ready',
+                  ack_status: 'Pending',
+                  balance: (r.balance && r.balance > 0) ? r.balance : Number(targetJob.print_quantity || 1000),
+                  cod_amount: r.cod_amount !== undefined ? r.cod_amount : Number(targetJob.balance_due || targetJob.balance || 0),
+                  customer: targetJob.customer_name || r.customer,
+                  product: targetJob.job_title || targetJob.job_name || r.product,
+                  route_qty: Number(targetJob.print_quantity || r.route_qty || 1000),
+                  area: targetJob.delivery_area || targetJob.area || r.area || 'Bengaluru Central',
+                }
+              : r
+            );
+          }
+          const newRouteJob = {
+            id: `rj-${Date.now()}`,
+            route_id: 'route-1',
+            job_no: ticket,
+            customer: targetJob.customer_name || 'Customer',
+            product: targetJob.job_title || targetJob.job_name || 'Commercial Print Order',
+            route_qty: Number(targetJob.print_quantity || 1000),
+            dispatched: 0,
+            balance: Number(targetJob.print_quantity || 1000),
+            cod_amount: Number(targetJob.balance_due || targetJob.balance || 0),
+            ack_status: 'Pending',
+            status: 'Ready',
+            area: targetJob.delivery_area || targetJob.area || 'Bengaluru Central',
+          };
+          return [newRouteJob, ...prev];
+        });
+      }
+
+      // Synchronize linked Enquiry so Order Desk reflects the live production stage
+      setEnquiries(prev => prev.map(e => {
+        const isMatch = e.enquiry_no === targetJob.job_ticket_number ||
+          e.id === targetJob.job_ticket_number ||
+          (e.dn_no && `SO-2026-${e.dn_no}` === targetJob.job_ticket_number) ||
+          (targetJob.job_ticket_number && (targetJob.job_ticket_number.includes(e.id) || e.id.includes(targetJob.job_ticket_number))) ||
+          (e.dn_no && targetJob.job_ticket_number?.includes(e.dn_no)) ||
+          (targetJob.customer_name && e.customer_name && e.customer_name.toLowerCase().trim() === targetJob.customer_name.toLowerCase().trim());
+        if (isMatch) {
+          const isDelivered = canonicalStage === STAGES.COMPLETED;
+          return {
+            ...e,
+            current_stage: canonicalStage,
+            status: isDelivered ? 'Completed' : (canonicalStage === STAGES.CANCELLED ? 'Cancelled' : 'Booked')
+          };
+        }
+        return e;
+      }));
+
+      // Synchronize linked Sales Booking
+      setSalesBookings(prev => prev.map(b => {
+        const isMatch = b.booking_number === targetJob.job_ticket_number ||
+          b.id === targetJob.job_ticket_number ||
+          (targetJob.customer_name && b.customer_name?.toLowerCase().trim() === targetJob.customer_name?.toLowerCase().trim());
+        if (isMatch) {
+          return {
+            ...b,
+            current_stage: canonicalStage,
+            status: canonicalStage === STAGES.COMPLETED ? 'Completed' : 'Booked'
+          };
+        }
+        return b;
+      }));
+
+      // Synchronize linked Prepress Job
+      setPrepressJobs(prev => prev.map(p => {
+        const isMatch = p.job_ticket_number === targetJob.job_ticket_number || p.id === targetJob.job_ticket_number;
+        if (isMatch) {
+          return {
+            ...p,
+            current_stage: canonicalStage,
+            production_release_authorized: canonicalStage !== STAGES.PREPRESS && canonicalStage !== STAGES.QUOTATION
+          };
+        }
+        return p;
+      }));
 
       addAlert({
         alert_type: 'TaskAlert',
         severity: 'Info',
-        message: `Stage Progression: Job ${targetJob.job_ticket_number} moved to [${nextStage}] stage.${numHours > 0 ? ` (${numHours} hrs logged)` : ''}`,
+        message: `Stage Progression: Job ${targetJob.job_ticket_number} moved to [${STAGE_CONFIG[canonicalStage]?.label || canonicalStage}] stage.${numHours > 0 ? ` (${numHours} hrs logged)` : ''}`,
       });
     }
   };
@@ -1406,6 +1891,7 @@ export const AppProvider = ({ children }) => {
 
   // Universal Rewind Job Stage / Return for QC Rework
   const rewindJobStage = (jobId, targetStage, returnReason = '') => {
+    const canonicalStage = normalizeStage(targetStage);
     const cleanReason = (returnReason || 'Job sent back from QC for rework / plate remake / correction.').trim();
     let targetTicket = null;
     let targetJob = null;
@@ -1417,14 +1903,14 @@ export const AppProvider = ({ children }) => {
         targetTicket = j.job_ticket_number;
         const returnComment = {
           id: `com-${Date.now()}`,
-          text: `[RETURNED FROM QC to ${targetStage}]: ${cleanReason}`,
+          text: `[RETURNED FROM QC to ${STAGE_CONFIG[canonicalStage]?.label || canonicalStage}]: ${cleanReason}`,
           author: activeUser.full_name,
-          stage: targetStage,
+          stage: canonicalStage,
           timestamp: new Date().toISOString()
         };
         return {
           ...j,
-          current_stage: targetStage,
+          current_stage: canonicalStage,
           qc_flagged: true,
           returned_from_qc: true,
           last_qc_action: 'SentBack',
@@ -1446,23 +1932,24 @@ export const AppProvider = ({ children }) => {
         job_ticket_number: jobObj.job_ticket_number,
         operator_user_id: activeUser.id,
         operator_name: activeUser.full_name,
-        workstation_stage: targetStage,
+        workstation_stage: canonicalStage,
         machine_name: jobObj.assigned_press_machine,
         started_at: new Date().toISOString(),
         completed_at: null,
         good_impressions: jobObj.print_quantity,
         waste_sheets_logged: 0,
         hours_worked: 0,
-        operator_notes: `[PIPELINE REWOUND BY QC]: Returned to ${targetStage}. Instructions: ${cleanReason}`,
+        operator_notes: `[PIPELINE REWOUND BY QC]: Returned to ${STAGE_CONFIG[canonicalStage]?.label || canonicalStage}. Instructions: ${cleanReason}`,
       }, ...prev]);
     }
 
     // If returning to Pre-press, update prepressJobs
-    if (targetStage === 'DesignProofing' || targetStage === 'Prepress' || targetStage === 'Pre-Press') {
+    if (canonicalStage === STAGES.PREPRESS) {
       setPrepressJobs(prev => prev.map(p => {
         if (p.job_ticket_number === ticket || p.id === ticket) {
           return {
             ...p,
+            current_stage: canonicalStage,
             customer_approval_status: 'RevisionRequested',
             production_release_authorized: false,
             returned_from_qc: true,
@@ -1475,11 +1962,12 @@ export const AppProvider = ({ children }) => {
     }
 
     // If returning to Finishing, reset finishingOps status to In-Progress
-    if (targetStage === 'FinishingQC' || targetStage === 'Finishing') {
+    if (canonicalStage === STAGES.FINISHING) {
       setFinishingOps(prev => prev.map(f => {
         if (f.job_ticket_number === ticket || f.id === ticket) {
           return {
             ...f,
+            current_stage: canonicalStage,
             status: 'In-Progress',
             returned_from_qc: true,
             moved_to_qc: false
@@ -1490,12 +1978,12 @@ export const AppProvider = ({ children }) => {
     }
 
     // If returning to Quotation / Costing
-    if (targetStage === 'Quotation' || targetStage === 'Order Desk' || targetStage === 'Costing') {
+    if (canonicalStage === STAGES.QUOTATION) {
       setEnquiries(prev => prev.map(e => {
         if (e.enquiry_no === ticket || e.id === ticket || (e.dn_no && `SO-2026-${e.dn_no}` === ticket) || (jobObj && e.customer_name === jobObj.customer_name)) {
           return {
             ...e,
-            current_stage: 'Costing',
+            current_stage: canonicalStage,
             costing_status: 'Costing In-Progress',
             support_notes: `[RETURNED FROM PIPELINE]: ${cleanReason}`
           };
@@ -1504,15 +1992,20 @@ export const AppProvider = ({ children }) => {
       }));
     }
 
+    // If returning away from Dispatch, remove from routeJobs
+    if (canonicalStage !== STAGES.DISPATCH) {
+      setRouteJobs(prev => prev.filter(r => r.job_no !== ticket && r.id !== jobId));
+    }
+
     addAlert({
       alert_type: 'RushOrderAlert',
       severity: 'Critical',
-      message: `[JOB RETURNED FROM QC] Job ${ticket} sent back to [${targetStage}] for rework. Reason: ${cleanReason}`,
+      message: `[JOB RETURNED FROM QC] Job ${ticket} sent back to [${STAGE_CONFIG[canonicalStage]?.label || canonicalStage}] for rework. Reason: ${cleanReason}`,
     });
 
     addNotificationLog({
       title: `Job ${ticket} Rewound by QC`,
-      message: `Returned to ${targetStage} stage. Reason: ${cleanReason}`,
+      message: `Returned to ${STAGE_CONFIG[canonicalStage]?.label || canonicalStage} stage. Reason: ${cleanReason}`,
       channel: 'App',
       type: 'Rework',
       status: 'Sent'
@@ -1636,7 +2129,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const recordPayment = (invoiceId, amount, method, refNo) => {
-    const inv = invoices.find(i => i.id === invoiceId);
+    const inv = invoices.find(i => i.id === invoiceId || i.invoice_number === invoiceId || i.job_ticket_number === invoiceId);
     if (!inv) return;
 
     const receipt = {
@@ -1654,7 +2147,7 @@ export const AppProvider = ({ children }) => {
 
     // Update invoice balance
     setInvoices(prev => prev.map(i => {
-      if (i.id !== invoiceId) return i;
+      if (i.id !== invoiceId && i.invoice_number !== invoiceId && i.id !== inv.id) return i;
       const newBal = Math.max(0, i.balance_due - Number(amount));
       const status = newBal <= 0 ? 'Paid' : 'Partial';
       return {
@@ -1662,6 +2155,30 @@ export const AppProvider = ({ children }) => {
         balance_due: newBal,
         payment_status: status,
       };
+    }));
+
+    // Update jobOrders balance_due
+    setJobOrders(prev => prev.map(j => {
+      if (j.id === inv.job_order_id || j.job_ticket_number === inv.job_ticket_number) {
+        const newBal = Math.max(0, (j.balance_due || 0) - Number(amount));
+        return {
+          ...j,
+          balance_due: newBal,
+        };
+      }
+      return j;
+    }));
+
+    // Update routeJobs COD amount
+    setRouteJobs(prev => prev.map(r => {
+      if (r.job_no === inv.job_ticket_number || r.id === inv.job_order_id) {
+        const newBal = Math.max(0, (r.cod_amount || 0) - Number(amount));
+        return {
+          ...r,
+          cod_amount: newBal,
+        };
+      }
+      return r;
     }));
 
     // Update customer CRM balance
@@ -1736,6 +2253,12 @@ export const AppProvider = ({ children }) => {
       ? bookedOrder.prepress
       : (matchedEnq?.prepress && matchedEnq.prepress !== '-' ? matchedEnq.prepress : 'Aruna');
 
+    const resolvedMachine = bookedOrder.assigned_press_machine ||
+      bookedOrder.target_machine ||
+      matchedEnq?.assigned_press_machine ||
+      matchedEnq?.target_machine ||
+      resolveDefaultPressMachine({ ...bookedOrder, ...matchedEnq });
+
     const existingPrep = prepressJobs.find(p => p.job_ticket_number === bookedOrder.booking_number);
     if (!existingPrep) {
       addPrepressJob({
@@ -1751,11 +2274,13 @@ export const AppProvider = ({ children }) => {
         customer_approval_status: 'PendingReview',
         production_release_authorized: false,
         ctp_plates_generated: 4,
+        assigned_press_machine: resolvedMachine,
         notes: `Released from Commercial Desk with Advance Payment (${paymentMethod}: ${transactionRef || 'Recorded'})`
       });
     } else {
       updatePrepressJob(existingPrep.id, {
-        assigned_designer: resolvedDesigner
+        assigned_designer: resolvedDesigner,
+        assigned_press_machine: existingPrep.assigned_press_machine || resolvedMachine
       });
     }
 
@@ -1777,18 +2302,18 @@ export const AppProvider = ({ children }) => {
         customer_name: bookedOrder.customer_name,
         job_title: bookedOrder.job_title || `${bookedOrder.customer_name} Commercial Order`,
         production_type: 'Offset',
-        print_quantity: 5000,
-        paper_details: '300 GSM Art Card (20" x 30")',
-        color_spec: '4/4 Front & Back (Process CMYK)',
-        finishing_spec: 'Thermal Matte Lamination, Die-Punch & Pasting',
-        current_stage: 'Pre-Press',
+        print_quantity: bookedOrder.print_quantity || matchedEnq?.quantity || 5000,
+        paper_details: bookedOrder.paper_details || matchedEnq?.paper_spec || '300 GSM Art Card (20" x 30")',
+        color_spec: bookedOrder.color_spec || matchedEnq?.color_spec || '4/4 Front & Back (Process CMYK)',
+        finishing_spec: bookedOrder.finishing_spec || matchedEnq?.finishing_requirements || 'Thermal Matte Lamination, Die-Punch & Pasting',
+        current_stage: STAGES.PREPRESS,
         priority: orderPriority,
         is_rush_order: isRush,
         queue_position: queuePos,
         total_cost: bookedOrder.order_total,
         balance_due: bookedOrder.balance_pending,
         advance_paid: adv,
-        assigned_press_machine: 'Ryobi 660 (Ramamurthy Nagar Plant)',
+        assigned_press_machine: resolvedMachine,
         created_at: new Date().toISOString(),
         target_completion_date: new Date(Date.now() + 86400000 * 2).toISOString()
       };
@@ -1796,11 +2321,12 @@ export const AppProvider = ({ children }) => {
     } else {
       setJobOrders(prev => prev.map(j => j.job_ticket_number === bookedOrder.booking_number ? {
         ...j,
-        current_stage: 'Pre-Press',
+        current_stage: STAGES.PREPRESS,
         priority: orderPriority,
         is_rush_order: isRush,
         advance_paid: adv,
-        balance_due: bookedOrder.balance_pending
+        balance_due: bookedOrder.balance_pending,
+        assigned_press_machine: j.assigned_press_machine || resolvedMachine
       } : j));
     }
 
@@ -1839,7 +2365,7 @@ export const AppProvider = ({ children }) => {
           advance: (Number(e.advance) || 0) + adv,
           payment_mode: paymentMethod,
           transaction_ref: transactionRef,
-          current_stage: 'Pre-Press',
+          current_stage: STAGES.PREPRESS,
           status: 'Booked'
         };
       }
@@ -1942,12 +2468,68 @@ export const AppProvider = ({ children }) => {
     setCustomerRejections(INITIAL_CUSTOMER_REJECTIONS);
     setNotificationsLog(INITIAL_NOTIFICATIONS_LOG);
     setMasterData(INITIAL_MASTER_DATA);
+    setSelectedDate(getTodayFormattedDate());
+    setIsManualDate(false);
     addAlert({
       alert_type: 'TaskAlert',
       severity: 'Info',
       message: '[DATABASE RESTORED] Impress MIS demo database restored to default factory state.',
     });
   };
+
+  // Clear all current jobs in all stages and start fresh
+  const clearAllPipelineJobs = () => {
+    setEnquiries([]);
+    setCostingRequests([]);
+    setQuotes([]);
+    setSalesBookings([]);
+    setPrepressJobs([]);
+    setDesignProofs([]);
+    setJobOrders([]);
+    setWorkstationLogs([]);
+    setMaterialReservations([]);
+    setFinishingOps([]);
+    setIssues([]);
+    setDispatchRecords([]);
+    setRouteJobs([]);
+    setTripSheets([]);
+    setInvoices([]);
+    setPaymentReceipts([]);
+    setFeedbackList([]);
+    setCustomerRejections([]);
+    setExcessStock([]);
+    setOutsourceChallans([]);
+    setPurchaseRequests([]);
+    setTasks([]);
+    setNotificationsLog([]);
+    setAlerts([]);
+
+    const pipelineKeys = [
+      'enquiries', 'costing', 'quotes', 'sales_bookings', 'prepress_jobs',
+      'proofs', 'jobs', 'logs', 'reservations', 'finishing_ops',
+      'issues', 'dispatch', 'route_jobs', 'trip_sheets', 'invoices',
+      'receipts', 'feedback', 'customer_rejections', 'excess_stock',
+      'outsource_challans', 'po', 'tasks', 'notifications_log', 'alerts'
+    ];
+    pipelineKeys.forEach(k => {
+      localStorage.setItem(`${STORAGE_KEY}_${k}`, JSON.stringify([]));
+    });
+
+    addAlert({
+      alert_type: 'TaskAlert',
+      severity: 'Info',
+      message: '[FRESH PIPELINE] All jobs across all stages cleared. Ready for fresh test run.'
+    });
+  };
+
+  // One-time automatic clean pipeline initialization
+  useEffect(() => {
+    const isCleaned = localStorage.getItem(`${STORAGE_KEY}_fresh_pipeline_v1`);
+    if (!isCleaned) {
+      clearAllPipelineJobs();
+      localStorage.setItem(`${STORAGE_KEY}_fresh_pipeline_v1`, 'true');
+    }
+  }, []);
 
   // Central Authoritative Rush Status Resolver
   const resolveJobRushStatus = (entity) => {
@@ -2032,6 +2614,7 @@ export const AppProvider = ({ children }) => {
         updateEnquiry,
         toggleStarEnquiry,
         resetToDefaultData,
+        clearAllPipelineJobs,
         selectedJobForModal,
         setSelectedJobForModal,
         selectedInvoiceForModal,
@@ -2047,6 +2630,8 @@ export const AppProvider = ({ children }) => {
         vehicles,
         tripSheets,
         createTripSheet,
+        updateJobDeliveryStatus,
+        completeTripSheet,
         selectedTripSheetForModal,
         setSelectedTripSheetForModal,
         ownerMetrics,
@@ -2082,7 +2667,7 @@ export const AppProvider = ({ children }) => {
         isMasterEnquiryModalOpen,
         setIsMasterEnquiryModalOpen,
         selectedDate,
-        setSelectedDate,
+        setSelectedDate: handleSetSelectedDate,
         selectedSourceFilter,
         setSelectedSourceFilter,
         activeBranch,
@@ -2105,6 +2690,15 @@ export const AppProvider = ({ children }) => {
         markQCFlagFixed,
         sendBackJobFromQC,
         rewindJobStage,
+        // Canonical Stage Constants & Normalization
+        STAGES,
+        CANONICAL_STAGES,
+        STAGE_CONFIG,
+        STAGE_DROPDOWN_OPTIONS,
+        normalizeStage,
+        getNextStage,
+        getPrevStage,
+        getStageDisplay,
       }}
     >
       {children}

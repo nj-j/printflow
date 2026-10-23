@@ -10,6 +10,7 @@ import {
   Archive
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { STAGES, normalizeStage } from '../../utils/stageConstants';
 
 export const OrderClosureFeedback = () => {
   const {
@@ -21,7 +22,7 @@ export const OrderClosureFeedback = () => {
     setActiveTab,
   } = useApp();
 
-  const deliveredJobs = jobOrders.filter(j => j.current_stage === 'Delivered' || j.current_stage === 'Completed');
+  const deliveredJobs = jobOrders.filter(j => normalizeStage(j.current_stage) === STAGES.COMPLETED);
   const [selectedJobTicket, setSelectedJobTicket] = useState(deliveredJobs[0]?.job_ticket_number || '');
   const [ratingStars, setRatingStars] = useState(5);
   const [feedbackNotes, setFeedbackNotes] = useState('Excellent color registration and on-time delivery! We look forward to ordering again.');

@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal } from './Modal';
 import { Printer, Zap, Clock, ShieldCheck, UserCheck, Layers, Sparkles } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { STAGES, normalizeStage } from '../../utils/stageConstants';
 
 export const JobTicketModal = () => {
   const { selectedJobForModal, setSelectedJobForModal, bumpJobToTop, advanceJobStage } = useApp();
@@ -10,6 +11,7 @@ export const JobTicketModal = () => {
 
   const job = selectedJobForModal;
   const isUrgent = job.priority === 'Urgent' || job.is_rush_order;
+  const currentCanonicalStage = normalizeStage(job.current_stage);
 
   const handlePrint = () => {
     window.print();
@@ -133,9 +135,9 @@ export const JobTicketModal = () => {
                 <td>{job.assigned_operator || 'Rajesh Nair'}</td>
                 <td>{job.print_quantity} / 30 Waste</td>
                 <td>
-                  {job.current_stage === 'PressRun' ? (
+                  {currentCanonicalStage === STAGES.PRESS ? (
                     <span className="badge-warning font-bold">[IN PROGRESS]</span>
-                  ) : job.current_stage === 'Finishing' || job.current_stage === 'Dispatch' || job.current_stage === 'Delivered' || job.current_stage === 'Completed' ? (
+                  ) : currentCanonicalStage === STAGES.FINISHING || currentCanonicalStage === STAGES.QC || currentCanonicalStage === STAGES.DISPATCH || currentCanonicalStage === STAGES.COMPLETED ? (
                     <span className="badge-pass">[PASSED]</span>
                   ) : (
                     <span className="badge-pending">[PENDING]</span>
@@ -148,9 +150,9 @@ export const JobTicketModal = () => {
                 <td>Anil Kumar</td>
                 <td>Trimming & Packing</td>
                 <td>
-                  {job.current_stage === 'Finishing' ? (
+                  {currentCanonicalStage === STAGES.FINISHING ? (
                     <span className="badge-warning font-bold">[IN PROGRESS]</span>
-                  ) : job.current_stage === 'Dispatch' || job.current_stage === 'Delivered' || job.current_stage === 'Completed' ? (
+                  ) : currentCanonicalStage === STAGES.QC || currentCanonicalStage === STAGES.DISPATCH || currentCanonicalStage === STAGES.COMPLETED ? (
                     <span className="badge-pass">[PASSED]</span>
                   ) : (
                     <span className="badge-pending">[PENDING]</span>
@@ -163,8 +165,10 @@ export const JobTicketModal = () => {
                 <td>Logistics Team</td>
                 <td>0 Defects Found</td>
                 <td>
-                  {job.current_stage === 'Dispatch' || job.current_stage === 'Delivered' || job.current_stage === 'Completed' ? (
+                  {currentCanonicalStage === STAGES.DISPATCH || currentCanonicalStage === STAGES.COMPLETED ? (
                     <span className="badge-pass">[PASSED]</span>
+                  ) : currentCanonicalStage === STAGES.QC ? (
+                    <span className="badge-warning font-bold">[IN PROGRESS]</span>
                   ) : (
                     <span className="badge-pending">[PENDING]</span>
                   )}

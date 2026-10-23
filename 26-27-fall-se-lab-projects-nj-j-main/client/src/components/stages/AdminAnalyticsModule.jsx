@@ -1,8 +1,7 @@
 import React from 'react';
 import {
   BarChart3,
-  Send,
-  Sliders,
+  Radar,
   Sparkles,
   Layers,
   Bell,
@@ -11,16 +10,17 @@ import {
 import { useApp } from '../../context/AppContext';
 import { OwnerViewDashboard } from './OwnerViewDashboard';
 import { NotificationAutomation } from './NotificationAutomation';
-import { MasterDataConfig } from './MasterDataConfig';
 
 export const AdminAnalyticsModule = () => {
   const {
     activeSubTab,
     setActiveSubTab,
-    notificationsLog
+    notificationsLog,
+    alerts = []
   } = useApp();
 
-  const currentSubTab = activeSubTab || 'executive_oee';
+  const currentSubTab = activeSubTab === 'config' ? 'executive_oee' : (activeSubTab || 'executive_oee');
+  const unreadAlertsCount = (alerts || []).filter(a => !a.is_read).length;
 
   const subTabs = [
     {
@@ -32,17 +32,10 @@ export const AdminAnalyticsModule = () => {
     },
     {
       id: 'notifications',
-      label: 'Notification Hub',
-      icon: Send,
-      badge: `${notificationsLog.length} Sent`,
-      badgeColor: 'bg-blue-100 text-blue-700'
-    },
-    {
-      id: 'config',
-      label: 'Master Data Config',
-      icon: Sliders,
-      badge: 'Live',
-      badgeColor: 'bg-emerald-100 text-emerald-800'
+      label: 'System Alerts & Radar',
+      icon: Radar,
+      badge: unreadAlertsCount > 0 ? `${unreadAlertsCount} Unread` : `${alerts.length} Events`,
+      badgeColor: unreadAlertsCount > 0 ? 'bg-rose-100 text-rose-800' : 'bg-blue-100 text-blue-700'
     }
   ];
 
@@ -91,8 +84,6 @@ export const AdminAnalyticsModule = () => {
       <div>
         {currentSubTab === 'notifications' ? (
           <NotificationAutomation />
-        ) : currentSubTab === 'config' ? (
-          <MasterDataConfig />
         ) : (
           <OwnerViewDashboard />
         )}

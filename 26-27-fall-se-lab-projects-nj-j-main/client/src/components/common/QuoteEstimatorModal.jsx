@@ -15,10 +15,12 @@ import {
   TrendingUp,
   Tag,
   User,
-  Phone
+  Phone,
+  RotateCcw
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { TechnicalSpecSheetModal } from './TechnicalSpecSheetModal';
+import { FLEET_MACHINE_OPTIONS, resolveDefaultPressMachine } from '../../utils/machineRouting';
 
 export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) => {
   const { customers, createQuote, activeUser } = useApp();
@@ -49,12 +51,27 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
   const [finishingCostManual, setFinishingCostManual] = useState(0);
   const [wasteMarginPercent, setWasteMarginPercent] = useState(10);
   const [priority, setPriority] = useState('Normal');
-  const [profitMarginPercent, setProfitMarginPercent] = useState(25);
   const [saveToRegister, setSaveToRegister] = useState(true);
+
+  // Editable overrides for the 6 cost breakdown components (null means auto-calculated)
+  const [paperCostOverride, setPaperCostOverride] = useState(null);
+  const [plateCostOverride, setPlateCostOverride] = useState(null);
+  const [inkCostOverride, setInkCostOverride] = useState(null);
+  const [pressRuntimeCostOverride, setPressRuntimeCostOverride] = useState(null);
+  const [finishingCostOverride, setFinishingCostOverride] = useState(null);
+  const [wasteCostOverride, setWasteCostOverride] = useState(null);
 
   // Sync state whenever selected enquiry changes
   useEffect(() => {
     if (enquiry) {
+      // Clear any manual overrides when opening or switching enquiries
+      setPaperCostOverride(null);
+      setPlateCostOverride(null);
+      setInkCostOverride(null);
+      setPressRuntimeCostOverride(null);
+      setFinishingCostOverride(null);
+      setWasteCostOverride(null);
+
       const title = enquiry.job_name || enquiry.job_title || enquiry.job_specification || 'Commercial Print Job';
       setJobTitle(title);
 
@@ -128,14 +145,12 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
       }
 
       // 6. Target Machine suggestion
-      const jobTypes = Array.isArray(enquiry.job_types) ? enquiry.job_types.join(' ').toLowerCase() : String(enquiry.job_types || '').toLowerCase();
-      if (jobTypes.includes('digital') || initialQty <= 500) {
-        setTargetMachine('KMC4080 Digital');
-      } else if (initialQty >= 5000) {
-        setTargetMachine('Lithrone 26');
-      } else {
-        setTargetMachine('Ryobi 660');
-      }
+      const suggestedMachine = resolveDefaultPressMachine({
+        ...enquiry,
+        quantity: initialQty,
+        assigned_press_machine: enquiry.assigned_press_machine || enquiry.target_machine
+      });
+      setTargetMachine(suggestedMachine);
 
       // 7. Finishing & Bindery from structured enquiry.finishing array / string
       let finishingText = '';
@@ -181,35 +196,73 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
   const netSheets = Math.ceil(quantity / upsPerSheet);
   const grossSheets = Math.ceil(netSheets * (1 + wasteMarginPercent / 100));
   const reamsRequired = Math.max(0.2, Number((grossSheets / 500).toFixed(2)));
-  const paperCost = Math.round(reamsRequired * paperRatePerReam);
+
+  // Auto defaults
+  const defaultPaperCost = Math.round(reamsRequired * paperRatePerReam);
+  const paperCost = paperCostOverride !== null
+    ? (paperCostOverride === '' ? 0 : Math.max(0, Math.round(Number(paperCostOverride) || 0)))
+    : defaultPaperCost;
 
   const plateCount = colorFront + colorBack;
   const plateRate = targetMachine.includes('Digital') ? 0 : 260;
-  const plateCost = plateCount * plateRate;
+  const defaultPlateCost = plateCount * plateRate;
+  const plateCost = plateCostOverride !== null
+    ? (plateCostOverride === '' ? 0 : Math.max(0, Math.round(Number(plateCostOverride) || 0)))
+    : defaultPlateCost;
 
-  const inkCost = targetMachine.includes('Digital')
+  const defaultInkCost = targetMachine.includes('Digital')
     ? Math.round(quantity * (colorFront + colorBack) * 0.8)
     : Math.round(quantity * (colorFront + colorBack) * 0.45);
+  const inkCost = inkCostOverride !== null
+    ? (inkCostOverride === '' ? 0 : Math.max(0, Math.round(Number(inkCostOverride) || 0)))
+    : defaultInkCost;
 
   const impressionCount = Math.ceil(grossSheets * (colorFront > 0 ? 1 : 0) + (colorBack > 0 ? grossSheets : 0));
   const hourlyRate = targetMachine.includes('Lithrone') ? 1800 : (targetMachine.includes('Ryobi') ? 1400 : 1200);
   const pressRuntimeHours = Math.max(1.0, Number((impressionCount / 4000).toFixed(1)));
-  const pressRuntimeCost = targetMachine.includes('Digital') ? 0 : Math.round(pressRuntimeHours * hourlyRate);
+  const defaultPressRuntimeCost = targetMachine.includes('Digital') ? 0 : Math.round(pressRuntimeHours * hourlyRate);
+  const pressRuntimeCost = pressRuntimeCostOverride !== null
+    ? (pressRuntimeCostOverride === '' ? 0 : Math.max(0, Math.round(Number(pressRuntimeCostOverride) || 0)))
+    : defaultPressRuntimeCost;
 
-  const calculatedFinishingCost = finishingCostManual > 0
+  const defaultFinishingCost = finishingCostManual > 0
     ? finishingCostManual
     : Math.round(quantity * 0.6 + 500);
+  const calculatedFinishingCost = finishingCostOverride !== null
+    ? (finishingCostOverride === '' ? 0 : Math.max(0, Math.round(Number(finishingCostOverride) || 0)))
+    : defaultFinishingCost;
 
   const rawMaterialCost = paperCost + plateCost + inkCost;
-  const wasteMarginCost = Math.round((rawMaterialCost * wasteMarginPercent) / 100);
+  const defaultWasteMarginCost = Math.round((rawMaterialCost * wasteMarginPercent) / 100);
+  const wasteMarginCost = wasteCostOverride !== null
+    ? (wasteCostOverride === '' ? 0 : Math.max(0, Math.round(Number(wasteCostOverride) || 0)))
+    : defaultWasteMarginCost;
+
   const baseCost = rawMaterialCost + wasteMarginCost + pressRuntimeCost + calculatedFinishingCost;
 
   const rushSurchargeAmount = priority === 'Urgent'
     ? Math.round(baseCost * 0.25)
     : (priority === 'High' ? Math.round(baseCost * 0.10) : 0);
 
-  const totalEstimatedPrice = Math.round((baseCost + rushSurchargeAmount) * (1 + profitMarginPercent / 100));
+  const totalEstimatedPrice = Math.round(baseCost + rushSurchargeAmount);
   const unitPrice = quantity > 0 ? (totalEstimatedPrice / quantity).toFixed(2) : '0.00';
+
+  const hasAnyOverride =
+    paperCostOverride !== null ||
+    plateCostOverride !== null ||
+    inkCostOverride !== null ||
+    pressRuntimeCostOverride !== null ||
+    finishingCostOverride !== null ||
+    wasteCostOverride !== null;
+
+  const handleResetAllCosts = () => {
+    setPaperCostOverride(null);
+    setPlateCostOverride(null);
+    setInkCostOverride(null);
+    setPressRuntimeCostOverride(null);
+    setFinishingCostOverride(null);
+    setWasteCostOverride(null);
+  };
 
   const handleApply = (e) => {
     e.preventDefault();
@@ -223,12 +276,23 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
         sheetSize,
         colorSpec: `${colorFront}/${colorBack} CMYK`,
         targetMachine,
+        assignedPressMachine: targetMachine,
+        assigned_press_machine: targetMachine,
         finishingSpec,
         totalEstimatedPrice,
         plateCount,
         priority,
         jobTitle,
-        saveToRegister
+        saveToRegister,
+        costBreakdown: {
+          paperCost,
+          plateCost,
+          inkCost,
+          pressRuntimeCost,
+          finishingCost: calculatedFinishingCost,
+          wasteMarginCost,
+          hasOverrides: hasAnyOverride
+        }
       });
     }
 
@@ -433,11 +497,11 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
               value={targetMachine}
               onChange={(e) => setTargetMachine(e.target.value)}
             >
-              <option value="Lithrone 26">Lithrone 26 (Komori 4-Color - Ramamurthy Nagar)</option>
-              <option value="Ryobi 32">Ryobi 32 (Offset - Ramamurthy Nagar Plant)</option>
-              <option value="Ryobi 660">Ryobi 660 (Offset - Ramamurthy Nagar Plant)</option>
-              <option value="KMC4080 Digital">Konica Minolta C4080 (Digital Color)</option>
-              <option value="KM2100 Black">Konica Minolta 2100 (Digital Mono)</option>
+              {FLEET_MACHINE_OPTIONS.map(opt => (
+                <option key={opt.id} value={opt.name}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -492,41 +556,301 @@ export const QuoteEstimatorModal = ({ isOpen, onClose, enquiry, onApplyQuote }) 
         </div>
 
         {/* Real-time Math Cost Breakdown Card */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
           <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-            <span className="text-[11px] font-extrabold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
-              <Layers size={13} className="text-blue-600" />
-              Live Cost Breakdown ({quantity.toLocaleString('en-IN')} pcs)
-            </span>
-            <span className="text-[11px] font-semibold text-slate-500">
-              Markup: <strong className="text-slate-800">{profitMarginPercent}%</strong>
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-extrabold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                <Layers size={13} className="text-blue-600" />
+                Live Cost Breakdown ({quantity.toLocaleString('en-IN')} pcs)
+              </span>
+              <span className="text-[9px] font-semibold text-slate-500 bg-white border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
+                Directly Editable
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              {hasAnyOverride && (
+                <button
+                  type="button"
+                  onClick={handleResetAllCosts}
+                  className="text-[11px] font-semibold text-amber-600 hover:text-amber-800 flex items-center gap-1 cursor-pointer transition"
+                  title="Reset all manual cost overrides back to auto formulas"
+                >
+                  <RotateCcw size={11} />
+                  <span>Reset All to Auto</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
-            <div className="bg-white p-2 rounded-lg border border-slate-200">
-              <span className="text-[10px] text-slate-400 block">Paper ({reamsRequired} Rms)</span>
-              <span className="font-mono font-bold text-slate-800">₹{paperCost.toLocaleString('en-IN')}</span>
+            {/* 1. Paper */}
+            <div
+              className={`p-2 rounded-lg border transition-all ${
+                paperCostOverride !== null
+                  ? 'bg-amber-50/70 border-amber-300 ring-1 ring-amber-300/40'
+                  : 'bg-white border-slate-200 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[10px] mb-1">
+                <span className="text-slate-500 font-medium truncate" title={`Paper (${reamsRequired} Rms)`}>
+                  Paper ({reamsRequired} Rms)
+                </span>
+                {paperCostOverride !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setPaperCostOverride(null)}
+                    className="text-[9px] text-amber-700 hover:text-amber-900 font-semibold underline shrink-0 cursor-pointer"
+                    title="Reset to auto formula"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="relative flex items-center">
+                <span className="absolute left-2 text-xs font-bold text-slate-400 select-none pointer-events-none">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={paperCostOverride !== null ? paperCostOverride : defaultPaperCost}
+                  onChange={(e) => setPaperCostOverride(e.target.value)}
+                  className="w-full pl-5 pr-1 py-1 text-xs font-mono font-bold text-slate-800 bg-white/80 rounded border border-slate-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  placeholder={defaultPaperCost.toString()}
+                  title="Paper cost (editable)"
+                />
+              </div>
+              {paperCostOverride !== null && (
+                <div className="text-[9px] text-slate-400 mt-1 truncate">
+                  Auto: ₹{defaultPaperCost.toLocaleString('en-IN')}
+                </div>
+              )}
             </div>
-            <div className="bg-white p-2 rounded-lg border border-slate-200">
-              <span className="text-[10px] text-slate-400 block">Plates ({plateCount} CTP)</span>
-              <span className="font-mono font-bold text-slate-800">₹{plateCost.toLocaleString('en-IN')}</span>
+
+            {/* 2. Plates */}
+            <div
+              className={`p-2 rounded-lg border transition-all ${
+                plateCostOverride !== null
+                  ? 'bg-amber-50/70 border-amber-300 ring-1 ring-amber-300/40'
+                  : 'bg-white border-slate-200 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[10px] mb-1">
+                <span className="text-slate-500 font-medium truncate" title={`Plates (${plateCount} CTP)`}>
+                  Plates ({plateCount} CTP)
+                </span>
+                {plateCostOverride !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setPlateCostOverride(null)}
+                    className="text-[9px] text-amber-700 hover:text-amber-900 font-semibold underline shrink-0 cursor-pointer"
+                    title="Reset to auto formula"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="relative flex items-center">
+                <span className="absolute left-2 text-xs font-bold text-slate-400 select-none pointer-events-none">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={plateCostOverride !== null ? plateCostOverride : defaultPlateCost}
+                  onChange={(e) => setPlateCostOverride(e.target.value)}
+                  className="w-full pl-5 pr-1 py-1 text-xs font-mono font-bold text-slate-800 bg-white/80 rounded border border-slate-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  placeholder={defaultPlateCost.toString()}
+                  title="Plate cost (editable)"
+                />
+              </div>
+              {plateCostOverride !== null && (
+                <div className="text-[9px] text-slate-400 mt-1 truncate">
+                  Auto: ₹{defaultPlateCost.toLocaleString('en-IN')}
+                </div>
+              )}
             </div>
-            <div className="bg-white p-2 rounded-lg border border-slate-200">
-              <span className="text-[10px] text-slate-400 block">Ink & Consumables</span>
-              <span className="font-mono font-bold text-slate-800">₹{inkCost.toLocaleString('en-IN')}</span>
+
+            {/* 3. Ink & Consumables */}
+            <div
+              className={`p-2 rounded-lg border transition-all ${
+                inkCostOverride !== null
+                  ? 'bg-amber-50/70 border-amber-300 ring-1 ring-amber-300/40'
+                  : 'bg-white border-slate-200 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[10px] mb-1">
+                <span className="text-slate-500 font-medium truncate" title="Ink & Consumables">
+                  Ink & Consumables
+                </span>
+                {inkCostOverride !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setInkCostOverride(null)}
+                    className="text-[9px] text-amber-700 hover:text-amber-900 font-semibold underline shrink-0 cursor-pointer"
+                    title="Reset to auto formula"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="relative flex items-center">
+                <span className="absolute left-2 text-xs font-bold text-slate-400 select-none pointer-events-none">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={inkCostOverride !== null ? inkCostOverride : defaultInkCost}
+                  onChange={(e) => setInkCostOverride(e.target.value)}
+                  className="w-full pl-5 pr-1 py-1 text-xs font-mono font-bold text-slate-800 bg-white/80 rounded border border-slate-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  placeholder={defaultInkCost.toString()}
+                  title="Ink & consumables cost (editable)"
+                />
+              </div>
+              {inkCostOverride !== null && (
+                <div className="text-[9px] text-slate-400 mt-1 truncate">
+                  Auto: ₹{defaultInkCost.toLocaleString('en-IN')}
+                </div>
+              )}
             </div>
-            <div className="bg-white p-2 rounded-lg border border-slate-200">
-              <span className="text-[10px] text-slate-400 block">Press Runtime</span>
-              <span className="font-mono font-bold text-slate-800">₹{pressRuntimeCost.toLocaleString('en-IN')}</span>
+
+            {/* 4. Press Runtime */}
+            <div
+              className={`p-2 rounded-lg border transition-all ${
+                pressRuntimeCostOverride !== null
+                  ? 'bg-amber-50/70 border-amber-300 ring-1 ring-amber-300/40'
+                  : 'bg-white border-slate-200 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[10px] mb-1">
+                <span className="text-slate-500 font-medium truncate" title="Press Runtime">
+                  Press Runtime
+                </span>
+                {pressRuntimeCostOverride !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setPressRuntimeCostOverride(null)}
+                    className="text-[9px] text-amber-700 hover:text-amber-900 font-semibold underline shrink-0 cursor-pointer"
+                    title="Reset to auto formula"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="relative flex items-center">
+                <span className="absolute left-2 text-xs font-bold text-slate-400 select-none pointer-events-none">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={pressRuntimeCostOverride !== null ? pressRuntimeCostOverride : defaultPressRuntimeCost}
+                  onChange={(e) => setPressRuntimeCostOverride(e.target.value)}
+                  className="w-full pl-5 pr-1 py-1 text-xs font-mono font-bold text-slate-800 bg-white/80 rounded border border-slate-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  placeholder={defaultPressRuntimeCost.toString()}
+                  title="Press runtime cost (editable)"
+                />
+              </div>
+              {pressRuntimeCostOverride !== null && (
+                <div className="text-[9px] text-slate-400 mt-1 truncate">
+                  Auto: ₹{defaultPressRuntimeCost.toLocaleString('en-IN')}
+                </div>
+              )}
             </div>
-            <div className="bg-white p-2 rounded-lg border border-slate-200">
-              <span className="text-[10px] text-slate-400 block">Post-Press Finishing</span>
-              <span className="font-mono font-bold text-slate-800">₹{calculatedFinishingCost.toLocaleString('en-IN')}</span>
+
+            {/* 5. Post-Press Finishing */}
+            <div
+              className={`p-2 rounded-lg border transition-all ${
+                finishingCostOverride !== null
+                  ? 'bg-amber-50/70 border-amber-300 ring-1 ring-amber-300/40'
+                  : 'bg-white border-slate-200 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[10px] mb-1">
+                <span className="text-slate-500 font-medium truncate" title="Post-Press Finishing">
+                  Post-Press Finishing
+                </span>
+                {finishingCostOverride !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setFinishingCostOverride(null)}
+                    className="text-[9px] text-amber-700 hover:text-amber-900 font-semibold underline shrink-0 cursor-pointer"
+                    title="Reset to auto formula"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="relative flex items-center">
+                <span className="absolute left-2 text-xs font-bold text-slate-400 select-none pointer-events-none">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={finishingCostOverride !== null ? finishingCostOverride : defaultFinishingCost}
+                  onChange={(e) => setFinishingCostOverride(e.target.value)}
+                  className="w-full pl-5 pr-1 py-1 text-xs font-mono font-bold text-slate-800 bg-white/80 rounded border border-slate-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  placeholder={defaultFinishingCost.toString()}
+                  title="Post-press finishing cost (editable)"
+                />
+              </div>
+              {finishingCostOverride !== null && (
+                <div className="text-[9px] text-slate-400 mt-1 truncate">
+                  Auto: ₹{defaultFinishingCost.toLocaleString('en-IN')}
+                </div>
+              )}
             </div>
-            <div className="bg-white p-2 rounded-lg border border-slate-200">
-              <span className="text-[10px] text-slate-400 block">Wastage ({wasteMarginPercent}%)</span>
-              <span className="font-mono font-bold text-slate-800">₹{wasteMarginCost.toLocaleString('en-IN')}</span>
+
+            {/* 6. Wastage */}
+            <div
+              className={`p-2 rounded-lg border transition-all ${
+                wasteCostOverride !== null
+                  ? 'bg-amber-50/70 border-amber-300 ring-1 ring-amber-300/40'
+                  : 'bg-white border-slate-200 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[10px] mb-1">
+                <span className="text-slate-500 font-medium truncate" title={`Wastage (${wasteMarginPercent}%)`}>
+                  Wastage ({wasteMarginPercent}%)
+                </span>
+                {wasteCostOverride !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setWasteCostOverride(null)}
+                    className="text-[9px] text-amber-700 hover:text-amber-900 font-semibold underline shrink-0 cursor-pointer"
+                    title="Reset to auto formula"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+              <div className="relative flex items-center">
+                <span className="absolute left-2 text-xs font-bold text-slate-400 select-none pointer-events-none">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={wasteCostOverride !== null ? wasteCostOverride : defaultWasteMarginCost}
+                  onChange={(e) => setWasteCostOverride(e.target.value)}
+                  className="w-full pl-5 pr-1 py-1 text-xs font-mono font-bold text-slate-800 bg-white/80 rounded border border-slate-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                  placeholder={defaultWasteMarginCost.toString()}
+                  title="Wastage margin cost (editable)"
+                />
+              </div>
+              {wasteCostOverride !== null && (
+                <div className="text-[9px] text-slate-400 mt-1 truncate">
+                  Auto: ₹{defaultWasteMarginCost.toLocaleString('en-IN')}
+                </div>
+              )}
             </div>
           </div>
 

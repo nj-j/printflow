@@ -18,8 +18,9 @@ export const Navbar = () => {
     markAlertRead,
     clearAllAlerts,
     setActiveTab,
-    resetToDefaultData,
+    clearAllPipelineJobs,
     selectedDate,
+    setSelectedDate,
     selectedSourceFilter,
     setSelectedSourceFilter
   } = useApp();
@@ -53,10 +54,24 @@ export const Navbar = () => {
 
       {/* Right Controls: Date, Source, Notifications, User Role */}
       <div className="flex items-center gap-2.5">
-        {/* Date Filter */}
-        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 font-mono">
-          <Calendar size={13} className="text-slate-500" />
-          <span>{selectedDate}</span>
+        {/* Date Filter / Today's Date */}
+        <div
+          className="relative hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded text-xs text-slate-700 font-mono transition shadow-2xs cursor-pointer group"
+          title={`Today: ${selectedDate} (Click to change date)`}
+        >
+          <Calendar size={13} className="text-slate-500 pointer-events-none group-hover:text-blue-600 transition" />
+          <span className="pointer-events-none select-none">{selectedDate}</span>
+          <input
+            type="date"
+            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            title="Change Date"
+            onChange={(e) => {
+              if (e.target.value) {
+                const [y, m, d] = e.target.value.split('-');
+                setSelectedDate(`${d}-${m}-${y}`);
+              }
+            }}
+          />
         </div>
 
         {/* Source Dropdown */}
@@ -166,17 +181,18 @@ export const Navbar = () => {
           )}
         </div>
 
-        {/* Database Restore Button */}
+        {/* Start Fresh / Clear Pipeline Button */}
         <button
-          className="w-8 h-8 rounded-lg bg-slate-50 hover:bg-rose-50 border border-slate-200 text-slate-400 hover:text-rose-600 flex items-center justify-center transition"
+          className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs"
           onClick={() => {
-            if (window.confirm('Reset Impress MIS to default factory dataset?')) {
-              resetToDefaultData();
+            if (window.confirm('Clear all jobs across all stages and start fresh? All customer directory, press machines, and material inventory will be preserved.')) {
+              clearAllPipelineJobs();
             }
           }}
-          title="Reset Demo Data"
+          title="Clear all active jobs across all stages and start with a clean pipeline"
         >
-          <RotateCcw size={14} />
+          <RotateCcw size={13} className="text-rose-600" />
+          <span className="hidden md:inline">Start Fresh</span>
         </button>
       </div>
     </header>

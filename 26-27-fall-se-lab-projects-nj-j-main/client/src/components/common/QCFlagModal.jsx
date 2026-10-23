@@ -14,6 +14,7 @@ import {
   X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { STAGES, normalizeStage } from '../../utils/stageConstants';
 
 export const QCFlagModal = () => {
   const {
@@ -50,20 +51,19 @@ export const QCFlagModal = () => {
   const currentStage = job.current_stage || qcFlagSourceTerminal;
 
   const getTerminalIcon = (terminal) => {
-    const t = (terminal || '').toLowerCase();
-    if (t.includes('prepress') || t.includes('proof') || t.includes('design') || t.includes('pre-press')) {
-      return <Palette size={14} className="text-purple-600" />;
+    const canonical = normalizeStage(terminal);
+    switch (canonical) {
+      case STAGES.PREPRESS:
+        return <Palette size={14} className="text-purple-600" />;
+      case STAGES.PRESS:
+        return <Printer size={14} className="text-blue-600" />;
+      case STAGES.FINISHING:
+        return <Scissors size={14} className="text-teal-600" />;
+      case STAGES.DISPATCH:
+        return <Truck size={14} className="text-amber-600" />;
+      default:
+        return <Layers size={14} className="text-slate-600" />;
     }
-    if (t.includes('press') || t.includes('print')) {
-      return <Printer size={14} className="text-blue-600" />;
-    }
-    if (t.includes('finish') || t.includes('bind')) {
-      return <Scissors size={14} className="text-teal-600" />;
-    }
-    if (t.includes('dispatch') || t.includes('delivery')) {
-      return <Truck size={14} className="text-amber-600" />;
-    }
-    return <Layers size={14} className="text-slate-600" />;
   };
 
   const handleSubmit = (e) => {

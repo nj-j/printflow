@@ -12,6 +12,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { STAGES, normalizeStage } from '../../utils/stageConstants';
 
 export const Sidebar = () => {
   const {
@@ -24,7 +25,7 @@ export const Sidebar = () => {
   } = useApp();
 
   const urgentJobsCount = jobOrders.filter(
-    j => (j.priority === 'Urgent' || j.is_rush_order) && j.current_stage !== 'Completed'
+    j => (j.priority === 'Urgent' || j.is_rush_order) && normalizeStage(j.current_stage) !== STAGES.COMPLETED
   ).length;
   const openIssuesCount = (issues || []).filter(i => !i.resolved).length;
 
