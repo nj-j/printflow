@@ -4,6 +4,7 @@ import {
   Bell,
   CheckCircle,
   RotateCcw,
+  Sparkles,
   Calendar,
   ChevronDown
 } from 'lucide-react';
@@ -18,6 +19,7 @@ export const Navbar = () => {
     markAlertRead,
     clearAllAlerts,
     setActiveTab,
+    resetToDefaultData,
     clearAllPipelineJobs,
     selectedDate,
     setSelectedDate,
@@ -180,6 +182,20 @@ export const Navbar = () => {
             </div>
           )}
         </div>
+
+        {/* Load Mock Data */}
+        <button
+          className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg text-xs font-bold transition cursor-pointer shadow-2xs"
+          onClick={() => {
+            if (window.confirm('Load complete mock data across all stages and modules for screenshots?')) {
+              resetToDefaultData();
+            }
+          }}
+          title="Populate all modules with realistic mock data for testing & screenshots"
+        >
+          <Sparkles size={13} className="text-blue-600" />
+          <span className="hidden md:inline">Load Mock Data</span>
+        </button>
 
         {/* Start Fresh / Clear Pipeline Button */}
         <button

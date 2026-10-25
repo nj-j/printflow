@@ -50,7 +50,7 @@ import {
 
 const AppContext = createContext(null);
 
-const STORAGE_KEY = 'PRINTFLOW_ERP_STATE_V1';
+const STORAGE_KEY = 'PRINTFLOW_ERP_STATE_MOCK_V1';
 
 export const getTodayFormattedDate = () => {
   const now = new Date();

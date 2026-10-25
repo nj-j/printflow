@@ -526,6 +526,52 @@ const DEMO_JOB_ORDERS = [
     created_at: '2026-08-27T09:00:00Z',
     advance_paid: 8500,
     balance_due: 3500,
+  },
+  {
+    id: 'job-105',
+    job_ticket_number: 'JT-2026-005',
+    quote_id: null,
+    customer_id: 'cust-1',
+    customer_name: 'Starlight Tech Solutions',
+    job_title: 'Hardcover Product Catalogues (64 Pages) + Gold Foil',
+    production_type: 'Offset',
+    print_quantity: 1000,
+    paper_details: '170 GSM Matte Art Paper + 2.5mm Kappa Board',
+    color_spec: '4/4 Full Color CMYK',
+    finishing_spec: 'Thermal Matte Lamination, Section Sewing, Hard Case Binding',
+    current_stage: 'Prepress',
+    priority: 'High',
+    is_rush_order: false,
+    queue_position: 5,
+    assigned_press_machine: 'Ryobi 32 (Ramamurthy Nagar Plant)',
+    assigned_operator: 'Priya Sharma',
+    target_completion_date: '2026-08-31T18:00:00Z',
+    created_at: '2026-08-27T10:00:00Z',
+    advance_paid: 25000,
+    balance_due: 18500,
+  },
+  {
+    id: 'job-106',
+    job_ticket_number: 'JT-2026-006',
+    quote_id: null,
+    customer_id: 'cust-2',
+    customer_name: 'Ayodhya Residency',
+    job_title: 'Executive Visiting Cards & Stationery Set',
+    production_type: 'Digital',
+    print_quantity: 1000,
+    paper_details: '300 GSM Textured Imported Board',
+    color_spec: '4/4 Front & Back CMYK',
+    finishing_spec: 'Velvet Soft-Touch Lamination, Spot UV, Die Cut',
+    current_stage: 'QualityControl',
+    priority: 'Normal',
+    is_rush_order: false,
+    queue_position: 6,
+    assigned_press_machine: 'Konica Minolta C4080 (Kalkere Plant)',
+    assigned_operator: 'Anil Kumar',
+    target_completion_date: '2026-08-28T16:00:00Z',
+    created_at: '2026-08-27T11:00:00Z',
+    advance_paid: 3500,
+    balance_due: 1950,
   }
 ];
 
@@ -773,26 +819,74 @@ const DEMO_TASKS = [
 const DEMO_ALERTS = [
   {
     id: 'alt-1',
-    alert_type: 'RushOrderAlert',
-    severity: 'Critical',
-    message: '[RUSH ORDER ALERT] Job #JT-2026-001 (Apex Healthcare 3000 Brochures) is due TODAY by 6:00 PM.',
-    timestamp: '2026-08-28T09:00:00Z',
+    alert_type: 'DeliveryAlert',
+    severity: 'Success',
+    message: 'Job SO-2026-1792696806076 delivery status updated to [Delivered].',
+    timestamp: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
     is_read: false,
   },
   {
     id: 'alt-2',
-    alert_type: 'StockAlert',
-    severity: 'Warning',
-    message: '[LOW STOCK WARNING] CTP Thermal Offset Plates (SM 74) at 8 plates (Threshold: 30). PO #PO-2026-088 ordered.',
-    timestamp: '2026-08-28T08:30:00Z',
+    alert_type: 'TaskAlert',
+    severity: 'Info',
+    message: 'Stage Progression: Job SO-2026-1792696902048 moved to [Press / Printing] stage.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 75).toISOString(),
     is_read: false,
   },
   {
     id: 'alt-3',
+    alert_type: 'DeliveryAlert',
+    severity: 'Info',
+    message: 'Stage Progression: Job SO-2026-1792696806076 moved to [Delivery & Dispatch] stage.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 130).toISOString(),
+    is_read: false,
+  },
+  {
+    id: 'alt-4',
+    alert_type: 'TaskAlert',
+    severity: 'Info',
+    message: 'Stage Progression: Job SO-2026-1792696806076 moved to [QC & Packaging] stage.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 185).toISOString(),
+    is_read: false,
+  },
+  {
+    id: 'alt-5',
+    alert_type: 'RushOrderAlert',
+    severity: 'Critical',
+    message: '[RUSH ORDER ALERT] Job #JT-2026-001 (Apex Healthcare 3000 Brochures) is due TODAY by 6:00 PM.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
+    is_read: false,
+  },
+  {
+    id: 'alt-6',
+    alert_type: 'StockAlert',
+    severity: 'Warning',
+    message: '[LOW STOCK WARNING] CTP Thermal Offset Plates (SM 74) at 8 plates (Threshold: 30). PO #PO-2026-088 ordered.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 300).toISOString(),
+    is_read: false,
+  },
+  {
+    id: 'alt-7',
+    alert_type: 'DeliveryAlert',
+    severity: 'Info',
+    message: 'Stage Progression: Job SO-2026-17926968376642 moved to [Delivery & Dispatch] stage.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
+    is_read: true,
+  },
+  {
+    id: 'alt-8',
+    alert_type: 'TaskAlert',
+    severity: 'Info',
+    message: 'Stage Progression: Job SO-2026-1792696806076 moved to [Finishing & Bindery] stage.',
+    timestamp: new Date(Date.now() - 1000 * 60 * 420).toISOString(),
+    is_read: true,
+  },
+  {
+    id: 'alt-9',
     alert_type: 'PaymentAlert',
     severity: 'Warning',
     message: '[CREDIT ALERT] Horizon EduTech current balance is Rs 1,12,000 against Rs 5,00,000 credit limit (22% utilized).',
-    timestamp: '2026-08-27T18:00:00Z',
+    timestamp: new Date(Date.now() - 1000 * 60 * 500).toISOString(),
     is_read: true,
   }
 ];
@@ -1451,31 +1545,31 @@ export const WORKFLOW_CONTROL_GATES = [
 ];
 
 
-// Clean Slate: Fresh pipeline starts with 0 jobs across all stages
-export const INITIAL_PURCHASE_REQUESTS = [];
-export const INITIAL_QUOTES = [];
-export const INITIAL_DESIGN_PROOFS = [];
-export const INITIAL_JOB_ORDERS = [];
-export const INITIAL_WORKSTATION_LOGS = [];
-export const INITIAL_MATERIAL_RESERVATIONS = [];
-export const INITIAL_ISSUES = [];
-export const INITIAL_DISPATCH = [];
-export const INITIAL_INVOICES = [];
-export const INITIAL_PAYMENT_RECEIPTS = [];
-export const INITIAL_CUSTOMER_FEEDBACK = [];
-export const INITIAL_TASKS = [];
-export const INITIAL_ALERTS = [];
-export const INITIAL_ENQUIRIES = [];
-export const INITIAL_ROUTE_JOBS = [];
-export const INITIAL_TRIP_SHEETS = [];
-export const INITIAL_COSTING_REQUESTS = [];
-export const INITIAL_SALES_BOOKINGS = [];
-export const INITIAL_PREPRESS_JOBS = [];
-export const INITIAL_FINISHING_OPS = [];
-export const INITIAL_OUTSOURCE_CHALLANS = [];
-export const INITIAL_EXCESS_STOCK = [];
-export const INITIAL_CUSTOMER_REJECTIONS = [];
-export const INITIAL_NOTIFICATIONS_LOG = [];
+// Initial Seed Dataset populated with realistic demo mock data for presentations & screenshots
+export const INITIAL_PURCHASE_REQUESTS = DEMO_PURCHASE_REQUESTS;
+export const INITIAL_QUOTES = DEMO_QUOTES;
+export const INITIAL_DESIGN_PROOFS = DEMO_DESIGN_PROOFS;
+export const INITIAL_JOB_ORDERS = DEMO_JOB_ORDERS;
+export const INITIAL_WORKSTATION_LOGS = DEMO_WORKSTATION_LOGS;
+export const INITIAL_MATERIAL_RESERVATIONS = DEMO_MATERIAL_RESERVATIONS;
+export const INITIAL_ISSUES = DEMO_ISSUES;
+export const INITIAL_DISPATCH = DEMO_DISPATCH;
+export const INITIAL_INVOICES = DEMO_INVOICES;
+export const INITIAL_PAYMENT_RECEIPTS = DEMO_PAYMENT_RECEIPTS;
+export const INITIAL_CUSTOMER_FEEDBACK = DEMO_CUSTOMER_FEEDBACK;
+export const INITIAL_TASKS = DEMO_TASKS;
+export const INITIAL_ALERTS = DEMO_ALERTS;
+export const INITIAL_ENQUIRIES = DEMO_ENQUIRIES;
+export const INITIAL_ROUTE_JOBS = DEMO_ROUTE_JOBS;
+export const INITIAL_TRIP_SHEETS = DEMO_TRIP_SHEETS;
+export const INITIAL_COSTING_REQUESTS = DEMO_COSTING_REQUESTS;
+export const INITIAL_SALES_BOOKINGS = DEMO_SALES_BOOKINGS;
+export const INITIAL_PREPRESS_JOBS = DEMO_PREPRESS_JOBS;
+export const INITIAL_FINISHING_OPS = DEMO_FINISHING_OPS;
+export const INITIAL_OUTSOURCE_CHALLANS = DEMO_OUTSOURCE_CHALLANS;
+export const INITIAL_EXCESS_STOCK = DEMO_EXCESS_STOCK;
+export const INITIAL_CUSTOMER_REJECTIONS = DEMO_CUSTOMER_REJECTIONS;
+export const INITIAL_NOTIFICATIONS_LOG = DEMO_NOTIFICATIONS_LOG;
 
 export const DEMO_PIPELINE_DATA = {
   INITIAL_PURCHASE_REQUESTS: DEMO_PURCHASE_REQUESTS,
